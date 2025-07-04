@@ -29,6 +29,7 @@ const paymentRoutes = require('./routes/payment.routes');
 const { protect } = require('./middleware/auth');
 
 const app = express();
+app.set('trust proxy', 1); // trust first proxy
 const server = createServer(app);
 
 // Initialize real-time service
