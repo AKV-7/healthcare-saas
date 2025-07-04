@@ -64,10 +64,20 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // CORS configuration
+const getAllowedOrigins = () => {
+  if (process.env.NODE_ENV === 'production') {
+    // Support multiple origins separated by comma
+    const prodOrigins = process.env.FRONTEND_URL_PROD;
+    if (prodOrigins && prodOrigins.includes(',')) {
+      return prodOrigins.split(',').map(origin => origin.trim());
+    }
+    return [prodOrigins || 'https://healthcare-saas-m1v4.vercel.app'];
+  }
+  return [process.env.FRONTEND_URL || 'http://localhost:3000'];
+};
+
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? [process.env.FRONTEND_URL_PROD]
-    : [process.env.FRONTEND_URL || 'http://localhost:3000'],
+  origin: getAllowedOrigins(),
   credentials: true,
   optionsSuccessStatus: 200
 };
