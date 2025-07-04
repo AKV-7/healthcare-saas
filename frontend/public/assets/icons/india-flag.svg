@@ -1,0 +1,12 @@
+<svg width="24" height="16" viewBox="0 0 24 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Saffron stripe -->
+  <rect width="24" height="5.33" fill="#FF9933"/>
+  <!-- White stripe -->
+  <rect y="5.33" width="24" height="5.34" fill="#FFFFFF"/>
+  <!-- Green stripe -->
+  <rect y="10.67" width="24" height="5.33" fill="#138808"/>
+  <!-- Ashoka Chakra (simplified) -->
+  <circle cx="12" cy="8" r="1.5" fill="#000080" stroke="#000080" stroke-width="0.5"/>
+  <circle cx="12" cy="8" r="1" fill="#FFFFFF"/>
+  <circle cx="12" cy="8" r="0.5" fill="#000080"/>
+</svg> 

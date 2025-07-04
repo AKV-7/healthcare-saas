@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="140" height="40" viewBox="0 0 140 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g>
+    <!-- Caduceus Icon (simplified) -->
+    <g>
+      <!-- Staff -->
+      <rect x="22" y="8" width="4" height="24" rx="2" fill="#e53935"/>
+      <!-- Wings -->
+      <path d="M24 8 Q18 12 24 16" stroke="#e53935" stroke-width="2" fill="none"/>
+      <path d="M26 8 Q32 12 26 16" stroke="#e53935" stroke-width="2" fill="none"/>
+      <!-- Snakes (curves) -->
+      <path d="M24 16 Q22 20 24 24" stroke="#e53935" stroke-width="1.5" fill="none"/>
+      <path d="M26 16 Q28 20 26 24" stroke="#e53935" stroke-width="1.5" fill="none"/>
+      <!-- Head (circle) -->
+      <circle cx="24" cy="6" r="3" fill="#e53935"/>
+    </g>
+    <!-- Text -->
+    <text x="40" y="26" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="bold" fill="#e53935">Khushi</text>
+    <text x="40" y="38" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="bold" fill="#e53935">Homoeo</text>
+  </g>
+</svg> 
