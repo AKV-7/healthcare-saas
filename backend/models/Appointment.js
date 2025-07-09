@@ -50,11 +50,27 @@ const appointmentSchema = new mongoose.Schema({
   },
   patientEmail: {
     type: String,
-    required: true
+    required: [true, 'Patient email is required'],
+    validate: {
+      validator: function(value) {
+        return value && value.trim().length > 0;
+      },
+      message: 'Patient email cannot be empty'
+    }
   },
   patientPhone: {
     type: String,
-    required: true
+    required: [true, 'Patient phone is required'],
+    validate: {
+      validator: function(value) {
+        return value && value.trim().length > 0;
+      },
+      message: 'Patient phone cannot be empty'
+    }
+  },
+  attachments: {
+    type: [String], // Array of image URLs
+    default: []
   },
   status: {
     type: String,

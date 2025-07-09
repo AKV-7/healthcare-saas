@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
+import { FileUploader } from '@/components/FileUploader';
 import { SimpleNavButton } from '@/components/SimpleNavButton';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
@@ -28,6 +29,7 @@ export default function BookAppointment() {
   const [isLoading, setIsLoading] = useState(false);
   const [userData, setUserData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
 
   // Get userId from URL or localStorage
   const userId =
@@ -37,12 +39,38 @@ export default function BookAppointment() {
       : null);
 
   useEffect(() => {
-    // Get user data from localStorage
+    // Check if user just registered (priority)
+    const registeredUser = localStorage.getItem('registeredUser');
+    if (registeredUser) {
+      const user = JSON.parse(registeredUser);
+      console.log('Found registeredUser:', user);
+      setUserData(user);
+      // Clear the registration data since we've loaded it
+      localStorage.removeItem('registeredUser');
+      return;
+    }
+    
+    // Fallback to existing userData (for backward compatibility)
     const storedUserData = localStorage.getItem('userData');
     if (storedUserData) {
-      setUserData(JSON.parse(storedUserData));
+      const user = JSON.parse(storedUserData);
+      console.log('Found existing userData:', user);
+      setUserData(user);
     }
   }, []);
+
+  // Additional useEffect to validate user data and redirect if incomplete
+  useEffect(() => {
+    if (userData && (!userData.email || !userData.phone || userData.email.trim() === '' || userData.phone.trim() === '')) {
+      console.log('❌ Incomplete user data detected:', userData);
+      setError('Your contact information is incomplete. Please register or verify your details again.');
+      
+      // Redirect to registration after showing error
+      setTimeout(() => {
+        router.push('/register');
+      }, 3000);
+    }
+  }, [userData, router]);
 
   const {
     register,
@@ -61,10 +89,37 @@ export default function BookAppointment() {
   });
 
   const onSubmit = async (data: AppointmentFormData) => {
+    console.log('🚀 Starting appointment booking...');
+    console.log('Form data:', data);
+    console.log('User ID:', userId);
+    console.log('User data:', userData);
+    
     if (!userId) {
       setError('User ID not found. Please register first.');
       return;
     }
+
+    // Validate that we have user email and phone
+    if (!userData?.email || !userData?.phone) {
+      console.log('❌ Patient information validation failed:');
+      console.log('  userData:', userData);
+      console.log('  email:', userData?.email);
+      console.log('  phone:', userData?.phone);
+      console.log('  email type:', typeof userData?.email);
+      console.log('  phone type:', typeof userData?.phone);
+      
+      setError('Patient information is incomplete. Please register or provide your details first.');
+      
+      // Redirect to registration after showing error
+      setTimeout(() => {
+        router.push('/register');
+      }, 3000);
+      return;
+    }
+
+    console.log('✅ Patient information validation passed');
+    console.log('  email:', userData.email);
+    console.log('  phone:', userData.phone);
 
     setIsLoading(true);
     setError(null);
@@ -73,16 +128,61 @@ export default function BookAppointment() {
       // Check if this is a temporary user (from registration)
       const isTempUser = userData?.tempUser === true;
 
+      // Upload files with better error handling
+      const uploadedImageUrls: string[] = [];
+      if (uploadedFiles.length > 0) {
+        console.log(`Attempting to upload ${uploadedFiles.length} files...`);
+        
+        for (const file of uploadedFiles) {
+          try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            console.log(`Uploading file: ${file.name}`);
+            const uploadResponse = await fetch('/api/upload-image', {
+              method: 'POST',
+              body: formData,
+            });
+            
+            if (uploadResponse.ok) {
+              const uploadResult = await uploadResponse.json();
+              if (uploadResult.url) {
+                uploadedImageUrls.push(uploadResult.url);
+                console.log(`Successfully uploaded: ${file.name}`);
+              }
+            } else {
+              console.error(`Upload failed for ${file.name}:`, uploadResponse.status);
+            }
+          } catch (uploadError) {
+            console.error(`Error uploading file ${file.name}:`, uploadError);
+            // Continue with other files
+          }
+        }
+        
+        if (uploadedImageUrls.length < uploadedFiles.length) {
+          console.warn(`Only ${uploadedImageUrls.length} out of ${uploadedFiles.length} files uploaded successfully`);
+        }
+      }
+
       const appointmentData = {
         ...data,
         userId,
-        patientName: userData ? `${userData.firstName} ${userData.lastName}` : 'Unknown',
-        patientEmail: userData?.email || '',
-        patientPhone: userData?.phone || '',
+        patientName: userData?.name || `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() || 'Unknown Patient',
+        patientEmail: userData?.email,
+        patientPhone: userData?.phone,
+        attachments: uploadedImageUrls, // Add uploaded image URLs
         // Include user data for account creation if this is a temp user
         userData: isTempUser ? userData : undefined,
         isTempUser,
       };
+
+      console.log('📋 Appointment data being sent:');
+      console.log('  patientName:', appointmentData.patientName);
+      console.log('  patientEmail:', appointmentData.patientEmail, '(type:', typeof appointmentData.patientEmail, ')');
+      console.log('  patientPhone:', appointmentData.patientPhone, '(type:', typeof appointmentData.patientPhone, ')');
+      console.log('  userId:', appointmentData.userId);
+      console.log('  isTempUser:', appointmentData.isTempUser);
+      console.log('Full appointment data:', JSON.stringify(appointmentData, null, 2));
 
       const response = await fetch('/api/book-appointment', {
         method: 'POST',
@@ -252,6 +352,25 @@ export default function BookAppointment() {
               </div>
             )}
 
+            {/* Patient Information Display */}
+            {userData && (
+              <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+                <div className="flex">
+                  <svg className="size-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                      Booking as: {userData.name}
+                    </p>
+                    <p className="text-sm text-green-700 dark:text-green-300">
+                      📧 {userData.email} • 📱 {userData.phone}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {userData && (
               <div className="mb-8 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
                 <h3 className="mb-2 text-lg font-semibold text-green-800 dark:text-green-200">
@@ -379,6 +498,45 @@ export default function BookAppointment() {
                   placeholder="Any additional information you'd like to share..."
                   className="w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 transition-colors focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                 />
+              </div>
+
+              {/* Medical Images Upload */}
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-gray-900 dark:text-white">
+                  Medical Images or Documents (Optional)
+                </label>
+                <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
+                  Upload any relevant medical reports, X-rays, test results, or photos of your condition to help the doctor better understand your case.
+                </p>
+                <div className="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4 transition-colors hover:border-rose-400 hover:bg-rose-50 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-rose-500 dark:hover:bg-rose-900/10">
+                  <FileUploader
+                    files={uploadedFiles}
+                    onChange={setUploadedFiles}
+                  />
+                </div>
+                {uploadedFiles.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      {uploadedFiles.length} file{uploadedFiles.length > 1 ? 's' : ''} selected:
+                    </p>
+                    <ul className="mt-1 space-y-1">
+                      {uploadedFiles.map((file, index) => (
+                        <li key={index} className="flex items-center justify-between rounded bg-gray-100 px-3 py-2 text-sm dark:bg-gray-700">
+                          <span className="text-gray-700 dark:text-gray-300">{file.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+                            }}
+                            className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                          >
+                            Remove
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
 
               {/* Submit Button */}

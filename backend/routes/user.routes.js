@@ -14,6 +14,9 @@ const { protect, authorize, authorizeSuperAdmin, authorizeAdminLevel, authorizeH
 const User = require('../models/User');
 const { logger } = require('../utils/logger');
 const Appointment = require('../models/Appointment');
+const { adminLimiter } = require('../middleware/rateLimit');
+const fs = require('fs');
+const path = require('path');
 
 const router = express.Router();
 
@@ -128,6 +131,182 @@ router.post('/forgot-user-id', [
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving your user ID. Please try again.'
+    });
+  }
+});
+
+// Public route for verifying existing patients by name and phone (no authentication required)
+router.post('/verify-by-name-phone', [
+  body('name').trim().isLength({ min: 2, max: 100 }).withMessage('Name must be between 2 and 100 characters'),
+  body('phone').matches(/^\+91[6-9]\d{9}$/).withMessage('Please provide a valid Indian mobile number with +91')
+], async (req, res) => {
+  try {
+    const { name, phone } = req.body;
+    
+    // Validate inputs
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide valid name and phone number',
+        errors: errors.array()
+      });
+    }
+    
+    // Find user by name and phone (case-insensitive name search)
+    const user = await User.findOne({ 
+      name: { $regex: new RegExp(`^${name.trim()}$`, 'i') },
+      phone: phone.trim(),
+      role: 'patient'
+    });
+    
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Patient not found with the provided name and phone number' 
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        userId: user.userId,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        age: user.age,
+        gender: user.gender,
+        address: user.address,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    logger.error('Error verifying existing patient by name and phone:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error verifying patient' 
+    });
+  }
+});
+
+// TEMPORARY: Simple verification route without validation (for debugging)
+router.post('/verify-by-name-phone-simple', async (req, res) => {
+  try {
+    console.log('🎯 Simple verification route hit!');
+    console.log('Request body:', req.body);
+    const { name, phone } = req.body;
+    
+    if (!name || !phone) {
+      console.log('❌ Missing name or phone');
+      return res.status(400).json({
+        success: false,
+        message: 'Name and phone are required'
+      });
+    }
+    
+    console.log('🔍 Searching for user with:');
+    console.log('  Name (case-insensitive):', name.trim());
+    console.log('  Phone:', phone.trim());
+    console.log('  Role: patient');
+    
+    // Try multiple query approaches
+    console.log('\n🧪 Trying different query methods...');
+    
+    // Method 1: Exact match (case-sensitive)
+    let user = await User.findOne({ 
+      name: name.trim(),
+      phone: phone.trim(),
+      role: 'patient'
+    });
+    console.log('Method 1 (exact match):', user ? '✅ Found' : '❌ Not found');
+    
+    // Method 2: Case-insensitive without regex
+    if (!user) {
+      const users = await User.find({ 
+        phone: phone.trim(),
+        role: 'patient'
+      });
+      
+      user = users.find(u => u.name.toLowerCase() === name.trim().toLowerCase());
+      console.log('Method 2 (manual case check):', user ? '✅ Found' : '❌ Not found');
+    }
+    
+    // Method 3: Simple regex
+    if (!user) {
+      user = await User.findOne({ 
+        name: { $regex: new RegExp(`^${name.trim()}$`, 'i') },
+        phone: phone.trim(),
+        role: 'patient'
+      });
+      console.log('Method 3 (regex):', user ? '✅ Found' : '❌ Not found');
+    }
+    
+    console.log('📊 Final query result:', user ? 'User found' : 'No user found');
+    
+    if (!user) {
+      console.log('❌ No user found with provided credentials');
+      // Let's also check if there are any users at all
+      const totalUsers = await User.countDocuments();
+      const usersWithRole = await User.countDocuments({ role: 'patient' });
+      const usersWithPhone = await User.countDocuments({ phone: phone.trim() });
+      console.log(`📈 Total users: ${totalUsers}, Patients: ${usersWithRole}, With this phone: ${usersWithPhone}`);
+      
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Patient not found with the provided name and phone number' 
+      });
+    }
+    
+    console.log('✅ User found successfully:', user.name);
+    res.json({
+      success: true,
+      data: {
+        userId: user.userId,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        age: user.age,
+        gender: user.gender,
+        address: user.address,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error in simple verification route:', error);
+    logger.error('Error in simple verification route:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error verifying patient' 
+    });
+  }
+});
+
+// TEMPORARY: Debug endpoint to list available patients (public access)
+router.get('/debug/list', async (req, res) => {
+  try {
+    console.log('📋 Debug: Listing available patients');
+    
+    const patients = await User.find({ role: 'patient' })
+      .select('name phone email userId createdAt')
+      .limit(10);
+    
+    res.json({
+      success: true,
+      message: 'Available patients for testing',
+      count: patients.length,
+      data: patients.map(user => ({
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        userId: user.userId,
+        registeredAt: user.createdAt
+      }))
+    });
+  } catch (error) {
+    logger.error('Error listing patients:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error listing patients' 
     });
   }
 });
@@ -509,45 +688,52 @@ router.put('/admins/change-password', protect, authorizeHospitalManager, async (
   }
 });
 
-// Delete all users (only super_admin can do this)
-router.delete('/delete-all', protect, authorizeSuperAdmin, async (req, res) => {
+// Delete all users - requires admin passkey verification
+router.delete('/delete-all', protect, authorizeAdminLevel, adminLimiter, async (req, res) => {
   try {
-    // JWT authentication is already handled by protect and authorize middleware
-    // The user is guaranteed to be a super admin at this point
+    const { adminPasskey } = req.body;
     
-    // First, get all patient user IDs before deleting them
-    const patientUsers = await User.find({ 
-      role: { $nin: ['super_admin', 'admin', 'hospital_manager'] } // Get all non-admin users
-    }).select('_id');
+    if (!adminPasskey) {
+      return res.status(400).json({
+        success: false,
+        message: 'Admin passkey is required'
+      });
+    }
     
-    const patientUserIds = patientUsers.map(user => user._id);
+    // Read the admin passkey from config file
+    const adminPasskeyPath = path.join(__dirname, '../config/admin-passkey.json');
     
-    // Delete all appointments associated with these patients
-    let appointmentDeleteResult = { deletedCount: 0 };
-    if (patientUserIds.length > 0) {
-      appointmentDeleteResult = await Appointment.deleteMany({ 
-        userId: { $in: patientUserIds } 
+    if (!fs.existsSync(adminPasskeyPath)) {
+      return res.status(500).json({
+        success: false,
+        message: 'Admin passkey configuration not found'
+      });
+    }
+    
+    const adminPasskeyConfig = JSON.parse(fs.readFileSync(adminPasskeyPath, 'utf8'));
+    const storedPasskey = adminPasskeyConfig.passkey;
+    
+    if (adminPasskey !== storedPasskey) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid admin passkey'
       });
     }
     
     // Delete all users except admin users
-    const userDeleteResult = await User.deleteMany({ 
-      role: { $nin: ['super_admin', 'admin', 'hospital_manager'] } // Exclude all admin users for safety
-    });
-    
-    logger.info(`Super Admin ${req.user.email} deleted ${userDeleteResult.deletedCount} users and ${appointmentDeleteResult.deletedCount} appointments via API`);
+    const result = await User.deleteMany({ role: { $ne: 'admin' } });
     
     res.json({
       success: true,
-      message: `Successfully deleted ${userDeleteResult.deletedCount} users and ${appointmentDeleteResult.deletedCount} appointments`,
-      deletedUsers: userDeleteResult.deletedCount,
-      deletedAppointments: appointmentDeleteResult.deletedCount
+      message: `Successfully deleted ${result.deletedCount} users`,
+      deletedCount: result.deletedCount
     });
   } catch (error) {
-    logger.error('Error deleting all users and appointments:', error);
+    console.error('Error deleting all users:', error);
     res.status(500).json({
       success: false,
-      message: 'Error deleting users and appointments'
+      message: 'Failed to delete all users',
+      error: error.message
     });
   }
 });
@@ -560,5 +746,15 @@ router.route('/:id')
 
 router.route('/:id/toggle-status')
   .put(authorize('admin'), toggleUserStatus);
+
+// Add the admin rate limiter to admin routes
+router.get('/', protect, authorizeHospitalManager, adminLimiter, getUsers);
+router.get('/stats', protect, authorizeHospitalManager, adminLimiter, getUserStats);
+router.get('/doctors', protect, authorizeHospitalManager, adminLimiter, getDoctors);
+router.get('/:userId', protect, adminLimiter, checkOwnership, getUser);
+router.post('/', protect, authorizeAdminLevel, adminLimiter, createUser);
+router.put('/:userId', protect, adminLimiter, checkOwnership, updateUser);
+router.delete('/:userId', protect, authorizeAdminLevel, adminLimiter, deleteUser);
+router.put('/:userId/status', protect, authorizeAdminLevel, adminLimiter, toggleUserStatus);
 
 module.exports = router;

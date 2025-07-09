@@ -9,22 +9,8 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 
 export default function AppointmentDetailsPage({ params }: { params: { appointmentId: string } }) {
   const router = useRouter();
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [appointment, setAppointment] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Edit appointment states
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editDate, setEditDate] = useState('');
-  const [editTime, setEditTime] = useState('');
-  const [editStatus, setEditStatus] = useState('');
-  const [isUpdatingAppointment, setIsUpdatingAppointment] = useState(false);
-  const [editError, setEditError] = useState('');
-
-  // Notification states
-  const [showNotification, setShowNotification] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState('');
 
   const fetchAppointmentData = useCallback(async () => {
     try {
@@ -182,113 +168,6 @@ export default function AppointmentDetailsPage({ params }: { params: { appointme
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
-  const handleDelete = async () => {
-    if (!appointment) return;
-
-    setIsDeleting(true);
-    try {
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-      const adminToken = localStorage.getItem('adminToken');
-
-      const response = await fetch(`${backendUrl}/api/appointments/${params.appointmentId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        alert('Appointment deleted successfully');
-        router.push('/admin');
-      } else if (response.status === 401) {
-        alert('Authentication failed. Please login again.');
-        localStorage.removeItem('adminAuth');
-        localStorage.removeItem('adminToken');
-        localStorage.removeItem('adminUser');
-        router.push('/admin/login');
-      } else {
-        const errorText = await response.text();
-        console.error('Delete error:', errorText);
-        alert('Failed to delete appointment');
-      }
-    } catch (error) {
-      console.error('Error deleting appointment:', error);
-      alert('Error deleting appointment');
-    } finally {
-      setIsDeleting(false);
-      setShowDeleteModal(false);
-    }
-  };
-
-  const openEditModal = () => {
-    if (!appointment) return;
-
-    const a = appointment.data || appointment;
-    setEditDate(a.appointmentDate.split('T')[0]);
-    setEditTime(a.appointmentTime);
-    setEditStatus(a.status);
-    setEditError('');
-    setShowEditModal(true);
-  };
-
-  const handleAppointmentUpdate = async () => {
-    if (!editDate || !editTime || !editStatus) {
-      setEditError('All fields are required');
-      return;
-    }
-
-    setIsUpdatingAppointment(true);
-    setEditError('');
-
-    try {
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-      const adminToken = localStorage.getItem('adminToken');
-
-      const response = await fetch(`${backendUrl}/api/appointments/${params.appointmentId}`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          appointmentDate: editDate,
-          appointmentTime: editTime,
-          status: editStatus,
-        }),
-      });
-
-      if (response.ok) {
-        const updatedAppointment = await response.json();
-
-        // Update local state
-        setAppointment(updatedAppointment);
-
-        // Show success notification
-        showSuccessNotification('Appointment updated successfully! Email sent to patient.');
-
-        // Close modal
-        setShowEditModal(false);
-      } else {
-        const errorData = await response.json();
-        setEditError(errorData.message || 'Failed to update appointment');
-      }
-    } catch (error) {
-      console.error('Error updating appointment:', error);
-      setEditError('Network error. Please try again.');
-    } finally {
-      setIsUpdatingAppointment(false);
-    }
-  };
-
-  const showSuccessNotification = (message: string) => {
-    setNotificationMessage(message);
-    setShowNotification(true);
-    setTimeout(() => {
-      setShowNotification(false);
-    }, 3000);
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-100 dark:from-black dark:via-neutral-900 dark:to-black">
       {/* Header */}
@@ -325,34 +204,6 @@ export default function AppointmentDetailsPage({ params }: { params: { appointme
             </div>
             <div className="flex items-center space-x-3">
               <ThemeToggle />
-              <button
-                onClick={openEditModal}
-                className="flex items-center space-x-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2 font-medium text-white transition-all duration-200 hover:-translate-y-0.5 hover:from-blue-600 hover:to-blue-700 hover:shadow-lg"
-              >
-                <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                  />
-                </svg>
-                <span>Edit Appointment</span>
-              </button>
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                className="flex items-center space-x-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-2 font-medium text-white transition-all duration-200 hover:-translate-y-0.5 hover:from-red-600 hover:to-red-700 hover:shadow-lg"
-              >
-                <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
-                <span>Delete Appointment</span>
-              </button>
             </div>
           </div>
         </div>
@@ -698,9 +549,7 @@ export default function AppointmentDetailsPage({ params }: { params: { appointme
               </div>
 
               <div className="flex items-center space-x-3">
-                <div
-                  className={`flex size-8 items-center justify-center rounded-lg ${getStatusIconColor(a.status)}`}
-                >
+                <div className={`flex size-8 items-center justify-center rounded-lg ${getStatusIconColor(a.status)}`}>
                   <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
@@ -769,246 +618,87 @@ export default function AppointmentDetailsPage({ params }: { params: { appointme
                   </div>
                 </div>
               )}
+
+              {/* Medical Attachments Section */}
+              <div className="flex items-start space-x-3">
+                <div className="mt-1 flex size-8 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/30">
+                  <svg
+                    className="size-4 text-red-600 dark:text-red-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.586-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Medical Attachments</div>
+                  <div className="mt-2">
+                    {a.attachments && a.attachments.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {a.attachments.map((attachment: string, index: number) => {
+                          const fileName = attachment.split('/').pop() || `File ${index + 1}`;
+                          const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(attachment);
+                          return (
+                            <div
+                              key={index}
+                              className="flex items-center space-x-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-800"
+                            >
+                              <div className="flex size-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                                {isImage ? (
+                                  <svg className="size-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                ) : (
+                                  <svg className="size-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate font-medium text-gray-900 dark:text-white">
+                                  {fileName}
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  {isImage ? 'Image' : 'Document'}
+                                </div>
+                              </div>
+                              <a
+                                href={attachment}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex size-8 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-700"
+                              >
+                                <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                              </a>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-6 dark:border-gray-600 dark:bg-gray-800">
+                        <div className="text-center">
+                          <svg className="mx-auto size-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">No medical documents uploaded</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="mt-8 flex justify-center space-x-4">
-          <Link
-            href="/admin"
-            className="flex items-center space-x-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-6 py-3 font-medium text-white transition-all duration-200 hover:-translate-y-0.5 hover:from-red-600 hover:to-red-700 hover:shadow-lg"
-          >
-            <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10 19l-7-7m0 0l7-7m-7 7h18"
-              />
-            </svg>
-            <span>Back to Dashboard</span>
-          </Link>
         </div>
       </div>
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md scale-100 rounded-xl bg-white shadow-2xl transition-all duration-300 dark:bg-gray-900">
-            <div className="p-6">
-              <div className="mb-4 flex items-center space-x-3">
-                <div className="flex size-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
-                  <svg
-                    className="size-6 text-red-600 dark:text-red-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Delete Appointment</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">This action cannot be undone</p>
-                </div>
-              </div>
-
-              <div className="mb-6 rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
-                <p className="mb-3 text-gray-700 dark:text-gray-300">
-                  Are you sure you want to delete this appointment?
-                </p>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-gray-400">Patient:</span>
-                    <span className="font-medium dark:text-white">
-                      {a.user?.firstName} {a.user?.lastName}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-gray-400">Date:</span>
-                    <span className="font-medium dark:text-white">{formatDate(a.appointmentDate)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-gray-400">Time:</span>
-                    <span className="font-medium dark:text-white">{formatTime(a.appointmentTime)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-gray-400">Type:</span>
-                    <span className="font-medium capitalize dark:text-white">{a.appointmentType}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex space-x-3">
-                <button
-                  className="flex-1 rounded-lg bg-gray-100 px-4 py-2.5 font-medium text-gray-700 transition-colors duration-200 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                  onClick={() => setShowDeleteModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="flex flex-1 items-center justify-center space-x-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-2.5 font-medium text-white transition-all duration-200 hover:from-red-600 hover:to-red-700"
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? (
-                    <>
-                      <div className="size-4 animate-spin rounded-full border-b-2 border-white"></div>
-                      <span>Deleting...</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                      <span>Delete</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Appointment Modal */}
-      {showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md scale-100 rounded-xl bg-white shadow-2xl transition-all duration-300 dark:bg-gray-900">
-            <div className="p-6">
-              <div className="mb-6 flex items-center space-x-3">
-                <div className="flex size-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
-                  <svg
-                    className="size-6 text-red-600 dark:text-red-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Edit Appointment</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Update appointment details</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Appointment Date
-                  </label>
-                  <input
-                    type="date"
-                    value={editDate}
-                    onChange={(e) => setEditDate(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-red-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Appointment Time
-                  </label>
-                  <input
-                    type="time"
-                    value={editTime}
-                    onChange={(e) => setEditTime(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-red-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
-                  <select
-                    value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-red-400"
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="confirmed">Confirmed</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
-                    <option value="no-show">No Show</option>
-                  </select>
-                </div>
-
-                {editError && (
-                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-500 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
-                    {editError}
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-6 flex space-x-3">
-                <button
-                  className="flex-1 rounded-lg bg-gray-100 px-4 py-2.5 font-medium text-gray-700 transition-colors duration-200 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                  onClick={() => setShowEditModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="flex flex-1 items-center justify-center space-x-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-2.5 font-medium text-white transition-all duration-200 hover:from-red-600 hover:to-red-700"
-                  onClick={handleAppointmentUpdate}
-                  disabled={isUpdatingAppointment}
-                >
-                  {isUpdatingAppointment ? (
-                    <>
-                      <div className="size-4 animate-spin rounded-full border-b-2 border-white"></div>
-                      <span>Updating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                      <span>Update</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Success Notification */}
-      {showNotification && (
-        <div className="fixed right-4 top-4 z-50 translate-x-0 rounded-lg bg-green-500 px-6 py-3 text-white shadow-lg transition-all duration-300">
-          <div className="flex items-center space-x-2">
-            <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-            <span>{notificationMessage}</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

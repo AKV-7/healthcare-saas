@@ -8,7 +8,6 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { ForgotUserIdModal } from '@/components/ForgotUserIdModal';
 import { SimpleNavButton } from '@/components/SimpleNavButton';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
@@ -24,8 +23,11 @@ import { Input } from '@/components/ui/input';
 import { CLOUDINARY_ASSETS } from '@/constants/cloudinary-assets';
 
 const existingPatientSchema = z.object({
-  userId: z.string().min(1, 'User ID is required').length(8, 'User ID must be exactly 8 digits'),
-  email: z.string().email('Please enter a valid email address'),
+  name: z.string()
+    .min(2, 'Name must be at least 2 characters')
+    .max(100, 'Name cannot be more than 100 characters'),
+  phone: z.string()
+    .regex(/^\+91[6-9]\d{9}$/, 'Please provide a valid Indian mobile number with +91'),
 });
 
 export default function Page() {
@@ -37,8 +39,8 @@ export default function Page() {
   const form = useForm<z.infer<typeof existingPatientSchema>>({
     resolver: zodResolver(existingPatientSchema),
     defaultValues: {
-      userId: '',
-      email: '',
+      name: '',
+      phone: '+91',
     },
   });
 
@@ -48,7 +50,10 @@ export default function Page() {
     setSuccessMessage('');
 
     try {
-      const response = await fetch('/api/verify-existing-patient', {
+      // Call backend directly to bypass Next.js API route issues
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      // Using the working simple route
+      const response = await fetch(`${backendUrl}/api/users/verify-by-name-phone-simple`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -61,14 +66,20 @@ export default function Page() {
       if (response.ok && result.success) {
         setSuccessMessage('Patient verified successfully! Redirecting to booking...');
         // Store user data and redirect to book appointment
-        localStorage.setItem('existingPatientData', JSON.stringify(result.user));
+        const userData = {
+          userId: result.data.userId,
+          name: result.data.name,
+          email: result.data.email,
+          phone: result.data.phone
+        };
+        localStorage.setItem('registeredUser', JSON.stringify(userData));
         
         // Delay redirect to show success message
         setTimeout(() => {
-          router.push('/book-appointment');
+          router.push(`/book-appointment?userId=${result.data.userId}&existing=true`);
         }, 1500);
       } else {
-        setError(result.error || 'Failed to verify patient. Please check your details and try again.');
+        setError(result.message || 'Patient not found. Please check your name and phone number, or register as a new patient.');
       }
     } catch (error) {
       console.error('Verification error:', error);
@@ -78,9 +89,7 @@ export default function Page() {
     }
   };
 
-  const handleUserIdRetrieved = (userId: string) => {
-    form.setValue('userId', userId);
-  };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-amber-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
@@ -151,7 +160,7 @@ export default function Page() {
                   <span className="bg-gradient-to-r from-rose-600 to-amber-600 bg-clip-text text-transparent">Valued Patient</span>
                 </h1>
                 <p className="mt-6 text-lg text-gray-600 dark:text-gray-300 md:text-xl lg:text-2xl">
-                  Continue your healing journey with us. Access your patient portal to book appointments, view your medical history, and manage your health records seamlessly.
+                  Book your next appointment quickly and easily. Simply enter your name and phone number to get started.
                 </p>
               </div>
               
@@ -246,37 +255,36 @@ export default function Page() {
                       </svg>
                     </div>
                     <h2 className="bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-3xl font-bold text-transparent dark:from-white dark:to-gray-300">
-                      Patient Login
+                      Quick Booking
                     </h2>
-                    <p className="mt-3 text-gray-600 dark:text-gray-300">Enter your details to access your account</p>
+                    <p className="mt-3 text-gray-600 dark:text-gray-300">Enter your name and phone to book an appointment</p>
                   </div>
 
                   <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                       
-                      {/* User ID Field - Enhanced */}
+                      {/* Name Field */}
                       <FormField
                         control={form.control}
-                        name="userId"
+                        name="name"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="mb-3 flex items-center text-sm font-bold text-gray-700 dark:text-gray-200">
                               <svg className="mr-2 size-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                               </svg>
-                              Patient ID *
+                              Full Name *
                             </FormLabel>
                             <FormControl>
                               <div className="relative">
                                 <Input
-                                  placeholder="Enter your 8-digit Patient ID"
+                                  placeholder="Enter your full name"
                                   {...field}
-                                  maxLength={8}
                                   className="w-full rounded-xl border-2 border-gray-200 bg-white/50 p-4 text-gray-900 backdrop-blur-sm transition-all duration-200 placeholder:text-gray-400 focus:border-rose-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-rose-500/20 dark:border-gray-600 dark:bg-gray-800/50 dark:text-white dark:focus:border-rose-400 dark:focus:bg-gray-800"
                                 />
                                 <div className="absolute inset-y-0 right-0 flex items-center pr-3">
                                   <svg className="size-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m0 0a2 2 0 012 2m-2-2a2 2 0 00-2 2m0 0a2 2 0 01-2 2m2-2a2 2 0 012 2M9 5a2 2 0 00-2 2v6a2 2 0 002 2h6a2 2 0 002-2V7a2 2 0 00-2-2H9z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                   </svg>
                                 </div>
                               </div>
@@ -286,40 +294,62 @@ export default function Page() {
                               <svg className="mr-1 size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              Your Patient ID was provided during your first visit or registration. Don&apos;t remember it? Use &quot;Forgot User ID&quot; below.
+                              Enter the same name you used during registration.
                             </p>
                           </FormItem>
                         )}
                       />
 
-                      {/* Email Field - Enhanced */}
+                      {/* Phone Field */}
                       <FormField
                         control={form.control}
-                        name="email"
+                        name="phone"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="mb-3 flex items-center text-sm font-bold text-gray-700 dark:text-gray-200">
                               <svg className="mr-2 size-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                               </svg>
-                              Email Address *
+                              Phone Number *
                             </FormLabel>
                             <FormControl>
                               <div className="relative">
                                 <Input
-                                  type="email"
-                                  placeholder="your.email@example.com"
+                                  type="tel"
+                                  placeholder="+91 9876543210"
                                   {...field}
                                   className="w-full rounded-xl border-2 border-gray-200 bg-white/50 p-4 text-gray-900 backdrop-blur-sm transition-all duration-200 placeholder:text-gray-400 focus:border-amber-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-amber-500/20 dark:border-gray-600 dark:bg-gray-800/50 dark:text-white dark:focus:border-amber-400 dark:focus:bg-gray-800"
+                                  onChange={(e) => {
+                                    let value = e.target.value;
+                                    // Remove all non-digits
+                                    const digits = value.replace(/\D/g, '');
+                                    
+                                    // Format for Indian mobile numbers
+                                    if (digits.startsWith('91')) {
+                                      value = '+' + digits;
+                                    } else if (digits.length === 10) {
+                                      value = '+91' + digits;
+                                    } else if (!value.startsWith('+91')) {
+                                      value = '+91';
+                                    }
+                                    
+                                    form.setValue('phone', value);
+                                  }}
                                 />
                                 <div className="absolute inset-y-0 right-0 flex items-center pr-3">
                                   <svg className="size-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                                   </svg>
                                 </div>
                               </div>
                             </FormControl>
                             <FormMessage className="mt-2 text-sm text-red-600" />
+                            <p className="mt-2 flex items-center text-xs text-gray-500 dark:text-gray-400">
+                              <svg className="mr-1 size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              Enter the phone number you used during registration.
+                            </p>
                           </FormItem>
                         )}
                       />
@@ -383,9 +413,9 @@ export default function Page() {
                           ) : (
                             <>
                               <svg className="mr-3 size-6 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h6a2 2 0 012 2v4m-6 8V7m-8 8h16l-2 5H6l-2-5z" />
                               </svg>
-                              <span>Access Patient Portal</span>
+                              <span>Book Appointment</span>
                             </>
                           )}
                         </div>
@@ -418,11 +448,6 @@ export default function Page() {
                             </svg>
                             Check Status
                           </SimpleNavButton>
-                        </div>
-                        
-                        {/* Forgot User ID Section */}
-                        <div className="mt-4">
-                          <ForgotUserIdModal onUserIdRetrieved={handleUserIdRetrieved} />
                         </div>
                       </div>
 

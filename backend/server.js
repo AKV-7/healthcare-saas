@@ -13,6 +13,25 @@ const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
 const { createServer } = require('http');
 const { logger } = require('./utils/logger');
+const cloudinary = require('cloudinary').v2;
+
+// Configure Cloudinary
+try {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+  
+  // Verify Cloudinary configuration
+  if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+    console.log('✅ Cloudinary configured successfully');
+  } else {
+    console.warn('⚠️ Cloudinary configuration incomplete - some environment variables missing');
+  }
+} catch (error) {
+  console.error('❌ Cloudinary configuration failed:', error.message);
+}
 
 // Import custom modules
 const connectDB = require('./config/db');
@@ -27,6 +46,7 @@ const paymentRoutes = require('./routes/payment.routes');
 
 // Import middleware
 const { protect } = require('./middleware/auth');
+const { apiLimiter, adminLimiter } = require('./middleware/rateLimit');
 
 const app = express();
 app.set('trust proxy', 1); // trust first proxy
@@ -50,19 +70,13 @@ app.use(helmet({
   },
 }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-  message: {
-    success: false,
-    message: 'Too many requests from this IP, please try again later'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// Rate limiting - apply general limiter to all API routes
+app.use('/api/', apiLimiter);
 
-app.use('/api/', limiter);
+// Apply admin-specific rate limiter to admin routes
+app.use('/api/appointments/admin', adminLimiter);
+app.use('/api/users', adminLimiter);
+app.use('/api/analytics', adminLimiter);
 
 // CORS configuration
 const getAllowedOrigins = () => {
@@ -145,6 +159,38 @@ app.use('/api/users', userRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/payments', paymentRoutes);
+
+// File upload route with enhanced error handling
+const { uploadSingleFile } = require('./utils/upload');
+app.post('/api/upload', (req, res) => {
+  uploadSingleFile(req, res, (err) => {
+    try {
+      if (err) {
+        console.error('Upload middleware error:', err);
+        return res.status(400).json({ 
+          error: 'Upload failed', 
+          details: err.message 
+        });
+      }
+      
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+      
+      console.log('File uploaded successfully:', req.file.filename);
+      res.json({ 
+        url: req.file.path,
+        public_id: req.file.filename 
+      });
+    } catch (error) {
+      console.error('Upload route error:', error);
+      res.status(500).json({ 
+        error: 'Upload processing failed',
+        details: error.message 
+      });
+    }
+  });
+});
 
 // Real-time connection status endpoint
 app.get('/api/realtime/status', protect, (req, res) => {
@@ -286,13 +332,23 @@ process.on('SIGINT', () => {
 // Unhandled promise rejections
 process.on('unhandledRejection', (err, promise) => {
   logger.error('Unhandled Rejection at:', promise, 'reason:', err);
-  process.exit(1);
+  // Don't exit in development, just log the error
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  } else {
+    logger.warn('Continuing server operation in development mode...');
+  }
 });
 
 // Uncaught exceptions
 process.on('uncaughtException', (err) => {
   logger.error('Uncaught Exception:', err);
-  process.exit(1);
+  // Don't exit in development, just log the error
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  } else {
+    logger.warn('Continuing server operation in development mode...');
+  }
 });
 
 module.exports = app;

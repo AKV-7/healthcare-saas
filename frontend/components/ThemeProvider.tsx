@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 type Theme = 'light' | 'dark';
 
@@ -12,85 +12,83 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+// Utility functions
+const getStoredTheme = (): Theme | null => {
+  try {
+    return localStorage.getItem('theme') as Theme;
+  } catch {
+    return null;
+  }
+};
+
+const storeTheme = (theme: Theme): void => {
+  try {
+    localStorage.setItem('theme', theme);
+  } catch {
+    // Handle localStorage errors silently
+  }
+};
+
+const getSystemTheme = (): Theme => 
+  window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Start with a default theme and don't do any client-side detection until after hydration
-  const [theme, setTheme] = useState<Theme>('light');
-  // This flag helps us avoid hydration mismatches
+  const [theme, setThemeState] = useState<Theme>('light');
   const [mounted, setMounted] = useState(false);
 
-  // Only run this effect on the client after initial render (after hydration is complete)
+  // Initialize theme
   useEffect(() => {
     setMounted(true);
     
-    // Now it's safe to access browser APIs
-    try {
-      // Get theme from localStorage or system preference
-      const savedTheme = localStorage.getItem('theme') as Theme;
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light';
-
-      if (savedTheme && (savedTheme === 'light' || savedTheme === 'dark')) {
-        setTheme(savedTheme);
-      } else {
-        setTheme(systemTheme);
-        localStorage.setItem('theme', systemTheme);
-      }
-
-      // Listen for system theme changes
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handleChange = (e: MediaQueryListEvent) => {
-        if (!localStorage.getItem('theme')) {
-          setTheme(e.matches ? 'dark' : 'light');
-        }
-      };
-
-      mediaQuery.addEventListener('change', handleChange);
-      return () => mediaQuery.removeEventListener('change', handleChange);
-    } catch (error) {
-      console.error('Error setting up theme:', error);
-      setTheme('light'); // Fallback to light theme
+    const savedTheme = getStoredTheme();
+    const initialTheme = savedTheme || getSystemTheme();
+    
+    setThemeState(initialTheme);
+    if (!savedTheme) {
+      storeTheme(initialTheme);
     }
   }, []);
 
-  // Apply theme to document immediately when theme changes
+  // Handle system theme changes
+  useEffect(() => {
+    if (!mounted) return;
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      if (!getStoredTheme()) {
+        setThemeState(e.matches ? 'dark' : 'light');
+      }
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [mounted]);
+
+  // Apply theme to document
   useEffect(() => {
     if (mounted) {
-      const root = document.documentElement;
-      if (theme === 'dark') {
-        root.classList.add('dark');
-      } else {
-        root.classList.remove('dark');
-      }
+      document.documentElement.classList.toggle('dark', theme === 'dark');
     }
   }, [theme, mounted]);
 
-  // The toggle function updates state and localStorage
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    try {
-      localStorage.setItem('theme', newTheme);
-    } catch (error) {
-      // Handle localStorage errors silently
-    }
-  };
+  // Theme management functions
+  const setTheme = useCallback((newTheme: Theme) => {
+    setThemeState(newTheme);
+    storeTheme(newTheme);
+  }, []);
 
-  // Create context value with theme state and functions
+  const toggleTheme = useCallback(() => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setThemeState(newTheme);
+    storeTheme(newTheme);
+  }, [theme]);
+
   const contextValue = {
     theme,
     toggleTheme,
-    setTheme: (newTheme: Theme) => {
-      setTheme(newTheme);
-      try {
-        localStorage.setItem('theme', newTheme);
-      } catch (error) {
-        // Handle localStorage errors silently
-      }
-    },
+    setTheme,
   };
 
-  // Always provide the context, even during SSR
   return (
     <ThemeContext.Provider value={contextValue}>
       {children}
@@ -98,7 +96,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Hook to use the theme context
 export const useTheme = (): ThemeContextType => {
   const context = useContext(ThemeContext);
   if (!context) {

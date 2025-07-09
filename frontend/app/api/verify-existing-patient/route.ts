@@ -1,25 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Force dynamic rendering for this route
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
-    const { userId, email } = await request.json();
+    const { name, phone } = await request.json();
+
+    if (!name || !phone) {
+      return NextResponse.json(
+        { error: 'Name and phone number are required' },
+        { status: 400 }
+      );
+    }
 
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
     const response = await fetch(
-      `${backendUrl}/api/users/verify/${userId}?email=${encodeURIComponent(email)}`,
+      `${backendUrl}/api/users/verify-by-name-phone`,
       {
-        method: 'GET',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ name, phone }),
       }
     );
 
     if (!response.ok) {
       if (response.status === 404) {
         return NextResponse.json(
-          { error: 'User not found. Please check your User ID.' },
+          { error: 'Patient not found. Please check your name and phone number or register as a new patient.' },
           { status: 404 }
         );
       }
@@ -30,9 +41,7 @@ export async function POST(request: NextRequest) {
       let errorData;
       try {
         errorData = JSON.parse(errorText);
-        console.error('Backend verification error - parsed:', errorData);
       } catch (parseError) {
-        console.error('Backend verification error - could not parse:', parseError);
         errorData = { message: errorText };
       }
 
@@ -47,14 +56,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       user: {
-        id: result.data._id,
+        userId: result.data.userId,
+        name: result.data.name,
         email: result.data.email,
-        firstName: result.data.firstName,
-        lastName: result.data.lastName,
         phone: result.data.phone,
-        dateOfBirth: result.data.dateOfBirth,
+        age: result.data.age,
         gender: result.data.gender,
-        role: result.data.role,
       },
       message: 'Patient verified successfully',
     });

@@ -12,14 +12,22 @@ module.exports = {
         
         <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
           <h2 style="color: #28a745; margin: 0 0 15px 0;">✅ Appointment Confirmed</h2>
-          <p style="margin: 0; color: #333;">Dear ${user.firstName || 'Valued Patient'},</p>
+          <p style="margin: 0; color: #333;">Dear ${user.name || 'Valued Patient'},</p>
         </div>
         
         <div style="margin-bottom: 25px;">
           <h3 style="color: #333; margin: 0 0 15px 0;">Appointment Details:</h3>
           <table style="width: 100%; border-collapse: collapse;">
             <tr style="border-bottom: 1px solid #eee;">
-              <td style="padding: 10px 0; font-weight: bold; color: #555; width: 30%;">Date:</td>
+              <td style="padding: 10px 0; font-weight: bold; color: #555; width: 30%;">Patient Name:</td>
+              <td style="padding: 10px 0; color: #333;">${user.name}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 10px 0; font-weight: bold; color: #555;">Phone:</td>
+              <td style="padding: 10px 0; color: #333;">${user.phone}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 10px 0; font-weight: bold; color: #555;">Date:</td>
               <td style="padding: 10px 0; color: #333;">${appointment.date}</td>
             </tr>
             <tr style="border-bottom: 1px solid #eee;">
@@ -27,23 +35,24 @@ module.exports = {
               <td style="padding: 10px 0; color: #333;">${appointment.time}</td>
             </tr>
             <tr style="border-bottom: 1px solid #eee;">
-              <td style="padding: 10px 0; font-weight: bold; color: #555;">Doctor:</td>
-              <td style="padding: 10px 0; color: #333;">Dr. ${appointment.doctorName}</td>
+              <td style="padding: 10px 0; font-weight: bold; color: #555;">Appointment Type:</td>
+              <td style="padding: 10px 0; color: #333;">${appointment.type || 'General Consultation'}</td>
             </tr>
             <tr>
-              <td style="padding: 10px 0; font-weight: bold; color: #555;">Location:</td>
-              <td style="padding: 10px 0; color: #333;">${appointment.location || 'Khushi Homoeopathic Clinic'}</td>
+              <td style="padding: 10px 0; font-weight: bold; color: #555;">Doctor:</td>
+              <td style="padding: 10px 0; color: #333;">Dr. ${appointment.doctorName}</td>
             </tr>
           </table>
         </div>
         
         <div style="background-color: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
           <p style="margin: 0; color: #1976d2;"><strong>Please arrive 15 minutes before your scheduled time.</strong></p>
+          <p style="margin: 5px 0 0 0; color: #1976d2; font-size: 14px;">Bring a valid ID and any previous medical records.</p>
         </div>
         
         <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
           <p style="color: #666; margin: 0;">Thank you for choosing Khushi Homoeopathic Clinic</p>
-          <p style="color: #999; margin: 5px 0 0 0; font-size: 12px;">If you have any questions, please reply to this email.</p>
+          <p style="color: #999; margin: 5px 0 0 0; font-size: 12px;">If you have any questions, please reply to this email or call us.</p>
         </div>
       </div>
     `
@@ -60,7 +69,7 @@ module.exports = {
         
         <div style="background-color: #fff3e0; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
           <h2 style="color: #f57c00; margin: 0 0 15px 0;">⚠️ Appointment Cancelled</h2>
-          <p style="margin: 0; color: #333;">Dear ${user.firstName || 'Valued Patient'},</p>
+          <p style="margin: 0; color: #333;">Dear ${user.name || 'Valued Patient'},</p>
         </div>
         
         <p style="color: #333; line-height: 1.6;">We regret to inform you that your appointment has been cancelled.</p>
@@ -69,7 +78,15 @@ module.exports = {
           <h3 style="color: #333; margin: 0 0 15px 0;">Cancelled Appointment Details:</h3>
           <table style="width: 100%; border-collapse: collapse;">
             <tr style="border-bottom: 1px solid #eee;">
-              <td style="padding: 10px 0; font-weight: bold; color: #555; width: 30%;">Date:</td>
+              <td style="padding: 10px 0; font-weight: bold; color: #555; width: 30%;">Patient Name:</td>
+              <td style="padding: 10px 0; color: #333;">${user.name}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 10px 0; font-weight: bold; color: #555;">Phone:</td>
+              <td style="padding: 10px 0; color: #333;">${user.phone}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 10px 0; font-weight: bold; color: #555;">Date:</td>
               <td style="padding: 10px 0; color: #333;">${appointment.date}</td>
             </tr>
             <tr style="border-bottom: 1px solid #eee;">
@@ -85,11 +102,12 @@ module.exports = {
         
         <div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
           <p style="margin: 0; color: #2e7d32;">If you wish to reschedule, please contact us or book a new appointment through our system.</p>
+          <p style="margin: 10px 0 0 0; color: #2e7d32; font-size: 14px;">We apologize for any inconvenience caused.</p>
         </div>
         
         <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
           <p style="color: #666; margin: 0;">Khushi Homoeopathic Clinic</p>
-          <p style="color: #999; margin: 5px 0 0 0; font-size: 12px;">If you have any questions, please reply to this email.</p>
+          <p style="color: #999; margin: 5px 0 0 0; font-size: 12px;">If you have any questions, please reply to this email or call us.</p>
         </div>
       </div>
     `
@@ -106,7 +124,7 @@ module.exports = {
         
         <div style="background-color: #e3f2fd; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
           <h2 style="color: #1976d2; margin: 0 0 15px 0;">📅 Appointment Rescheduled</h2>
-          <p style="margin: 0; color: #333;">Dear ${user.firstName || 'Valued Patient'},</p>
+          <p style="margin: 0; color: #333;">Dear ${user.name || 'Valued Patient'},</p>
         </div>
         
         <p style="color: #333; line-height: 1.6;">Your appointment has been rescheduled. Please find the updated details below:</p>
@@ -122,7 +140,15 @@ module.exports = {
           <h3 style="color: #333; margin: 0 0 15px 0;">New Appointment Details:</h3>
           <table style="width: 100%; border-collapse: collapse;">
             <tr style="border-bottom: 1px solid #eee;">
-              <td style="padding: 10px 0; font-weight: bold; color: #555; width: 30%;">Date:</td>
+              <td style="padding: 10px 0; font-weight: bold; color: #555; width: 30%;">Patient Name:</td>
+              <td style="padding: 10px 0; color: #333;">${user.name}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 10px 0; font-weight: bold; color: #555;">Phone:</td>
+              <td style="padding: 10px 0; color: #333;">${user.phone}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 10px 0; font-weight: bold; color: #555;">Date:</td>
               <td style="padding: 10px 0; color: #333; font-weight: bold;">${appointment.date}</td>
             </tr>
             <tr style="border-bottom: 1px solid #eee;">
@@ -130,23 +156,24 @@ module.exports = {
               <td style="padding: 10px 0; color: #333; font-weight: bold;">${appointment.time}</td>
             </tr>
             <tr style="border-bottom: 1px solid #eee;">
-              <td style="padding: 10px 0; font-weight: bold; color: #555;">Doctor:</td>
-              <td style="padding: 10px 0; color: #333;">Dr. ${appointment.doctorName}</td>
+              <td style="padding: 10px 0; font-weight: bold; color: #555;">Appointment Type:</td>
+              <td style="padding: 10px 0; color: #333;">${appointment.type || 'General Consultation'}</td>
             </tr>
             <tr>
-              <td style="padding: 10px 0; font-weight: bold; color: #555;">Location:</td>
-              <td style="padding: 10px 0; color: #333;">${appointment.location || 'Khushi Homoeopathic Clinic'}</td>
+              <td style="padding: 10px 0; font-weight: bold; color: #555;">Doctor:</td>
+              <td style="padding: 10px 0; color: #333;">Dr. ${appointment.doctorName}</td>
             </tr>
           </table>
         </div>
         
         <div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
           <p style="margin: 0; color: #2e7d32;"><strong>Please arrive 15 minutes before your new scheduled time.</strong></p>
+          <p style="margin: 5px 0 0 0; color: #2e7d32; font-size: 14px;">Bring a valid ID and any previous medical records.</p>
         </div>
         
         <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
           <p style="color: #666; margin: 0;">Thank you for your understanding - Khushi Homoeopathic Clinic</p>
-          <p style="color: #999; margin: 5px 0 0 0; font-size: 12px;">If you have any questions, please reply to this email.</p>
+          <p style="color: #999; margin: 5px 0 0 0; font-size: 12px;">If you have any questions, please reply to this email or call us.</p>
         </div>
       </div>
     `
@@ -169,7 +196,7 @@ module.exports = {
               status === 'no-show' ? '⚠️ Missed Appointment' : 
               '📅 Appointment Updated'}
           </h2>
-          <p style="margin: 0; color: #333;">Dear ${user.firstName || 'Valued Patient'},</p>
+          <p style="margin: 0; color: #333;">Dear ${user.name || 'Valued Patient'},</p>
         </div>
         
         <div style="margin-bottom: 25px;">
@@ -188,8 +215,16 @@ module.exports = {
           <h3 style="color: #333; margin: 0 0 15px 0;">Appointment Details:</h3>
           <table style="width: 100%; border-collapse: collapse;">
             <tr style="border-bottom: 1px solid #eee;">
-              <td style="padding: 10px 0; font-weight: bold; color: #555; width: 30%;">Status:</td>
-              <td style="padding: 10px 0; color: #333; text-transform: capitalize;">${status}</td>
+              <td style="padding: 10px 0; font-weight: bold; color: #555; width: 30%;">Patient Name:</td>
+              <td style="padding: 10px 0; color: #333;">${user.name}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 10px 0; font-weight: bold; color: #555;">Phone:</td>
+              <td style="padding: 10px 0; color: #333;">${user.phone}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 10px 0; font-weight: bold; color: #555;">Status:</td>
+              <td style="padding: 10px 0; color: #333; text-transform: capitalize; font-weight: bold;">${status}</td>
             </tr>
             <tr style="border-bottom: 1px solid #eee;">
               <td style="padding: 10px 0; font-weight: bold; color: #555;">Date:</td>
@@ -200,27 +235,27 @@ module.exports = {
               <td style="padding: 10px 0; color: #333;">${appointment.time}</td>
             </tr>
             <tr style="border-bottom: 1px solid #eee;">
-              <td style="padding: 10px 0; font-weight: bold; color: #555;">Doctor:</td>
-              <td style="padding: 10px 0; color: #333;">Dr. ${appointment.doctorName}</td>
+              <td style="padding: 10px 0; font-weight: bold; color: #555;">Appointment Type:</td>
+              <td style="padding: 10px 0; color: #333;">${appointment.type || 'General Consultation'}</td>
             </tr>
             <tr>
-              <td style="padding: 10px 0; font-weight: bold; color: #555;">Location:</td>
-              <td style="padding: 10px 0; color: #333;">${appointment.location || 'Khushi Homoeopathic Clinic'}</td>
+              <td style="padding: 10px 0; font-weight: bold; color: #555;">Doctor:</td>
+              <td style="padding: 10px 0; color: #333;">Dr. ${appointment.doctorName}</td>
             </tr>
           </table>
         </div>
         
         ${status === 'confirmed' ? 
-          '<div style="background-color: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px;"><p style="margin: 0; color: #1976d2;"><strong>Please arrive 15 minutes before your scheduled time.</strong></p></div>' : 
+          '<div style="background-color: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px;"><p style="margin: 0; color: #1976d2;"><strong>Please arrive 15 minutes before your scheduled time.</strong></p><p style="margin: 5px 0 0 0; color: #1976d2; font-size: 14px;">Bring a valid ID and any previous medical records.</p></div>' : 
           status === 'completed' ? 
-          '<div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; margin-bottom: 20px;"><p style="margin: 0; color: #2e7d32;"><strong>We hope you found your visit helpful. Please follow any prescribed treatments.</strong></p></div>' : 
+          '<div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; margin-bottom: 20px;"><p style="margin: 0; color: #2e7d32;"><strong>We hope you found your visit helpful. Please follow any prescribed treatments.</strong></p><p style="margin: 5px 0 0 0; color: #2e7d32; font-size: 14px;">If you have any questions about your treatment, please contact us.</p></div>' : 
           status === 'cancelled' ? 
-          '<div style="background-color: #ffebee; padding: 15px; border-radius: 8px; margin-bottom: 20px;"><p style="margin: 0; color: #c62828;"><strong>Need to reschedule? Please contact us at your convenience.</strong></p></div>' : 
+          '<div style="background-color: #ffebee; padding: 15px; border-radius: 8px; margin-bottom: 20px;"><p style="margin: 0; color: #c62828;"><strong>Need to reschedule? Please contact us at your convenience.</strong></p><p style="margin: 5px 0 0 0; color: #c62828; font-size: 14px;">We apologize for any inconvenience caused.</p></div>' : 
           ''}
         
         <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
           <p style="color: #666; margin: 0;">Thank you for choosing Khushi Homoeopathic Clinic</p>
-          <p style="color: #999; margin: 5px 0 0 0; font-size: 12px;">If you have any questions, please reply to this email.</p>
+          <p style="color: #999; margin: 5px 0 0 0; font-size: 12px;">If you have any questions, please reply to this email or call us.</p>
         </div>
       </div>
     `

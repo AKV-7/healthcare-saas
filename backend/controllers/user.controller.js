@@ -262,28 +262,44 @@ const deleteUser = async (req, res) => {
       });
     }
 
-    // Check if user has active appointments
-    const activeAppointments = await Appointment.countDocuments({
-      $or: [
-        { patient: req.params.id, status: { $in: ['pending', 'confirmed'] } },
-        { doctor: req.params.id, status: { $in: ['pending', 'confirmed'] } }
-      ]
-    });
-
-    if (activeAppointments > 0) {
-      return res.status(400).json({
+    // Don't allow deletion of admin users
+    if (user.role === 'admin' || user.role === 'super_admin' || user.role === 'hospital_manager') {
+      return res.status(403).json({
         success: false,
-        message: 'Cannot delete user with active appointments'
+        message: 'Cannot delete admin users'
       });
     }
 
+    // Count appointments before deletion for logging
+    const appointmentCount = await Appointment.countDocuments({
+      $or: [
+        { userId: req.params.id },
+        { patient: req.params.id },
+        { patientEmail: user.email },
+        { patientPhone: user.phone }
+      ]
+    });
+
+    // Delete all appointments related to this user
+    await Appointment.deleteMany({
+      $or: [
+        { userId: req.params.id },
+        { patient: req.params.id },
+        { patientEmail: user.email },
+        { patientPhone: user.phone }
+      ]
+    });
+
+    // Delete the user
     await user.deleteOne();
 
-    logger.info(`User deleted: ${user.email} by admin: ${req.user.email}`);
+    logger.info(`User deleted: ${user.email} by admin. Also deleted ${appointmentCount} related appointments.`);
 
     res.status(200).json({
       success: true,
-      message: 'User deleted successfully'
+      message: `User deleted successfully along with ${appointmentCount} related appointments`,
+      deletedUser: 1,
+      deletedAppointments: appointmentCount
     });
   } catch (error) {
     logger.error('Delete user error:', error);

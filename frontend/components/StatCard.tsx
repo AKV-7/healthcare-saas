@@ -1,29 +1,31 @@
 import clsx from 'clsx';
 import Image from 'next/image';
 
-type StatCardProps = {
-  type: 'appointments' | 'pending' | 'cancelled' | 'completed';
+type StatCardType = 'appointments' | 'pending' | 'cancelled' | 'completed';
+
+const STAT_CARD_BACKGROUNDS: Record<StatCardType, string> = {
+  appointments: 'bg-appointments',
+  pending: 'bg-pending',
+  cancelled: 'bg-cancelled',
+  completed: 'bg-completed',
+};
+
+interface StatCardProps {
+  type: StatCardType;
   count: number;
   label: string;
   icon: string;
-};
+}
 
 export const StatCard = ({ count = 0, label, icon, type }: StatCardProps) => {
   return (
-    <div
-      className={clsx('stat-card', {
-        'bg-appointments': type === 'appointments',
-        'bg-pending': type === 'pending',
-        'bg-cancelled': type === 'cancelled',
-        'bg-completed': type === 'completed',
-      })}
-    >
+    <div className={clsx('stat-card', STAT_CARD_BACKGROUNDS[type])}>
       <div className="flex items-center gap-4">
-        <Image src={icon} height={32} width={32} alt="appointments" className="size-8 w-fit" />
-        <h2 className="text-32-bold text-white">{count}</h2>
+        <Image src={icon} height={32} width={32} alt={type} className="size-8" />
+        <h2 className="text-3xl font-bold text-white">{count}</h2>
       </div>
 
-      <p className="text-14-regular">{label}</p>
+      <p className="text-sm font-normal">{label}</p>
     </div>
   );
 };

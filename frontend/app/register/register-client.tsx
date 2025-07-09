@@ -8,116 +8,87 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { ThemeToggle } from '../../components/ThemeToggle';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
+// Simplified schema - removed password, added optional address, replaced dateOfBirth with age
 const schema = z.object({
-  firstName: z.string()
-    .min(2, 'First name must be at least 2 characters')
-    .max(50, 'First name cannot be more than 50 characters'),
-  lastName: z.string()
-    .min(2, 'Last name must be at least 2 characters')
-    .max(50, 'Last name cannot be more than 50 characters'),
+  name: z.string()
+    .min(2, 'Name must be at least 2 characters')
+    .max(100, 'Name cannot be more than 100 characters'),
   email: z.string()
     .email('Please enter a valid email address')
     .toLowerCase(),
-  password: z.string()
-    .min(12, 'Password must be at least 12 characters')
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, 
-      'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'),
-  confirmPassword: z.string(),
   phone: z.string()
-    .regex(/^\+?[1-9]\d{1,14}$/, 'Please provide a valid phone number'),
-  dateOfBirth: z.string().min(1, 'Date of birth is required'),
-  gender: z.enum(['male', 'female', 'other', 'prefer-not-to-say'], {
+    .regex(/^\+91[6-9]\d{9}$/, 'Please provide a valid Indian mobile number with +91'),
+  age: z.string()
+    .refine((val) => {
+      const num = parseInt(val);
+      return !isNaN(num) && num >= 1 && num <= 120;
+    }, 'Age must be between 1 and 120 years'),
+  gender: z.enum(['male', 'female', 'other'], {
     required_error: 'Please select your gender'
   }),
-  address: z.object({
-    street: z.string()
-      .min(1, 'Street address is required')
-      .max(100, 'Street address cannot be more than 100 characters'),
-    city: z.string()
-      .min(1, 'City is required')
-      .max(50, 'City cannot be more than 50 characters'),
-    state: z.string()
-      .min(1, 'State is required')
-      .max(50, 'State cannot be more than 50 characters'),
-    zip: z.string()
-      .min(1, 'ZIP code is required')
-      .max(15, 'ZIP code cannot be more than 15 characters'),
-    country: z.string()
-      .min(1, 'Country is required')
-      .max(50, 'Country cannot be more than 50 characters')
-  })
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
+  address: z.string()
+    .max(200, 'Address cannot be more than 200 characters')
+    .optional()
 });
 
 export default function RegisterClient() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
   
   const form = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
-      firstName: '',
-      lastName: '',
+      name: '',
       email: '',
-      password: '',
-      confirmPassword: '',
-      phone: '',
-      dateOfBirth: '',
+      phone: '+91',
+      age: '',
       gender: '',
-      address: {
-        street: '',
-        city: '',
-        state: '',
-        zip: '',
-        country: ''
-      }
+      address: ''
     }
   });
   
   const onSubmit = async (data: any) => {
     setIsLoading(true);
+    setError('');
+    setSuccess(false);
     
     try {
-      // Remove confirmPassword from the data before sending
-      const { confirmPassword, ...registrationData } = data;
-      
-      // Format the data to match the database schema
-      const formattedData = {
-        ...registrationData,
-        role: 'patient', // Default role for new registrations
-        dateOfBirth: new Date(registrationData.dateOfBirth).toISOString()
-      };
+      const response = await fetch('/api/register-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...data,
+          age: parseInt(data.age)
+        })
+      });
 
-      // TODO: Send to backend API for user registration
-      // const response = await fetch('/api/auth/register', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(formattedData)
-      // });
+      const result = await response.json();
 
-      // For now, generate a temporary user ID for the booking flow
-      const tempUserId = Math.random().toString(36).substring(2, 10).toUpperCase();
-
-      // Store user data temporarily (remove password for security)
-      const { password, ...safeUserData } = formattedData;
-      const tempUserData = {
-        ...safeUserData,
-        userId: tempUserId,
-        tempUser: true,
-        createdAt: new Date().toISOString(),
-      };
-
-      // Store in localStorage for the booking flow
-      localStorage.setItem('userData', JSON.stringify(tempUserData));
-
-      // Redirect to book appointment page
-      router.push(`/book-appointment?userId=${tempUserId}`);
+      if (response.ok) {
+        setSuccess(true);
+        // Store user data for booking flow
+        const userData = {
+          userId: result.data.userId,
+          name: result.data.name,
+          email: result.data.email,
+          phone: result.data.phone
+        };
+        localStorage.setItem('registeredUser', JSON.stringify(userData));
+        
+        // Redirect to book appointment page after 2 seconds
+        setTimeout(() => {
+          router.push(`/book-appointment?userId=${result.data.userId}&registered=true`);
+        }, 2000);
+      } else {
+        setError(result.message || 'Registration failed. Please try again.');
+      }
     } catch (error) {
       console.error('Registration failed:', error);
+      setError('Network error. Please check your connection and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -240,39 +211,47 @@ export default function RegisterClient() {
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Patient Registration</h2>
                     <p className="mt-2 text-gray-600 dark:text-gray-300">Please fill in your details to get started</p>
                   </div>                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                    {/* Personal Information */}
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div>
-                        <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                          First Name *
-                        </label>
-                        <input
-                          {...form.register('firstName')}
-                          type="text"
-                          className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-rose-400"
-                          placeholder="Enter your first name"
-                        />
-                        {form.formState.errors.firstName && (
-                          <p className="mt-1 text-sm text-red-600">{form.formState.errors.firstName.message}</p>
-                        )}
+                    {/* Display Success Message */}
+                    {success && (
+                      <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4">
+                        <div className="flex items-center">
+                          <svg className="mr-2 size-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <p className="font-medium text-green-800">Registration successful! Redirecting to book appointment...</p>
+                        </div>
                       </div>
-                      
-                      <div>
-                        <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                          Last Name *
-                        </label>
-                        <input
-                          {...form.register('lastName')}
-                          type="text"
-                          className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-rose-400"
-                          placeholder="Enter your last name"
-                        />
-                        {form.formState.errors.lastName && (
-                          <p className="mt-1 text-sm text-red-600">{form.formState.errors.lastName.message}</p>
-                        )}
+                    )}
+
+                    {/* Display Error Message */}
+                    {error && (
+                      <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
+                        <div className="flex items-center">
+                          <svg className="mr-2 size-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          <p className="text-red-800">{error}</p>
+                        </div>
                       </div>
+                    )}
+
+                    {/* Full Name */}
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">
+                        Full Name *
+                      </label>
+                      <input
+                        {...form.register('name')}
+                        type="text"
+                        className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-rose-400"
+                        placeholder="Enter your full name"
+                      />
+                      {form.formState.errors.name && (
+                        <p className="mt-1 text-sm text-red-600">{form.formState.errors.name.message}</p>
+                      )}
                     </div>
 
+                    {/* Email */}
                     <div>
                       <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">
                         Email Address *
@@ -288,38 +267,7 @@ export default function RegisterClient() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div>
-                        <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                          Password *
-                        </label>
-                        <input
-                          {...form.register('password')}
-                          type="password"
-                          className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-rose-400"
-                          placeholder="At least 12 characters with special chars"
-                        />
-                        {form.formState.errors.password && (
-                          <p className="mt-1 text-sm text-red-600">{form.formState.errors.password.message}</p>
-                        )}
-                      </div>
-                      
-                      <div>
-                        <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                          Confirm Password *
-                        </label>
-                        <input
-                          {...form.register('confirmPassword')}
-                          type="password"
-                          className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-rose-400"
-                          placeholder="Confirm your password"
-                        />
-                        {form.formState.errors.confirmPassword && (
-                          <p className="mt-1 text-sm text-red-600">{form.formState.errors.confirmPassword.message}</p>
-                        )}
-                      </div>
-                    </div>
-
+                    {/* Phone and Age */}
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div>
                         <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">
@@ -329,28 +277,49 @@ export default function RegisterClient() {
                           {...form.register('phone')}
                           type="tel"
                           className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-rose-400"
-                          placeholder="+1234567890"
+                          placeholder="+91 9876543210"
+                          onChange={(e) => {
+                            let value = e.target.value;
+                            // Remove all non-digits
+                            const digits = value.replace(/\D/g, '');
+                            
+                            // Format for Indian mobile numbers
+                            if (digits.startsWith('91')) {
+                              value = '+' + digits;
+                            } else if (digits.length === 10) {
+                              value = '+91' + digits;
+                            } else if (!value.startsWith('+91')) {
+                              value = '+91';
+                            }
+                            
+                            form.setValue('phone', value);
+                          }}
                         />
                         {form.formState.errors.phone && (
                           <p className="mt-1 text-sm text-red-600">{form.formState.errors.phone.message}</p>
                         )}
+                        <p className="mt-1 text-xs text-gray-500">Indian mobile number with +91</p>
                       </div>
                       
                       <div>
                         <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                          Date of Birth *
+                          Age *
                         </label>
                         <input
-                          {...form.register('dateOfBirth')}
-                          type="date"
+                          {...form.register('age')}
+                          type="number"
+                          min="1"
+                          max="120"
                           className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-rose-400"
+                          placeholder="Enter your age"
                         />
-                        {form.formState.errors.dateOfBirth && (
-                          <p className="mt-1 text-sm text-red-600">{form.formState.errors.dateOfBirth.message}</p>
+                        {form.formState.errors.age && (
+                          <p className="mt-1 text-sm text-red-600">{form.formState.errors.age.message}</p>
                         )}
                       </div>
                     </div>
 
+                    {/* Gender */}
                     <div>
                       <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">
                         Gender *
@@ -363,108 +332,31 @@ export default function RegisterClient() {
                         <option value="male">Male</option>
                         <option value="female">Female</option>
                         <option value="other">Other</option>
-                        <option value="prefer-not-to-say">Prefer not to say</option>
                       </select>
                       {form.formState.errors.gender && (
                         <p className="mt-1 text-sm text-red-600">{form.formState.errors.gender.message}</p>
                       )}
                     </div>
 
-                    {/* Address Section */}
-                    <div className="border-t border-gray-200 pt-6 dark:border-gray-700">
-                      <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Address Information</h3>
-                      
-                      <div>
-                        <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                          Street Address *
-                        </label>
-                        <input
-                          {...form.register('address.street')}
-                          type="text"
-                          className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-rose-400"
-                          placeholder="123 Main Street, Apt 4B"
-                        />
-                        {form.formState.errors.address?.street && (
-                          <p className="mt-1 text-sm text-red-600">{form.formState.errors.address.street.message}</p>
-                        )}
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div>
-                          <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                            City *
-                          </label>
-                          <input
-                            {...form.register('address.city')}
-                            type="text"
-                            className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-rose-400"
-                            placeholder="New York"
-                          />
-                          {form.formState.errors.address?.city && (
-                            <p className="mt-1 text-sm text-red-600">{form.formState.errors.address.city.message}</p>
-                          )}
-                        </div>
-                        
-                        <div>
-                          <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                            State/Province *
-                          </label>
-                          <input
-                            {...form.register('address.state')}
-                            type="text"
-                            className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-rose-400"
-                            placeholder="NY"
-                          />
-                          {form.formState.errors.address?.state && (
-                            <p className="mt-1 text-sm text-red-600">{form.formState.errors.address.state.message}</p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div>
-                          <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                            ZIP/Postal Code *
-                          </label>
-                          <input
-                            {...form.register('address.zip')}
-                            type="text"
-                            className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-rose-400"
-                            placeholder="10001"
-                          />
-                          {form.formState.errors.address?.zip && (
-                            <p className="mt-1 text-sm text-red-600">{form.formState.errors.address.zip.message}</p>
-                          )}
-                        </div>
-                        
-                        <div>
-                          <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                            Country *
-                          </label>
-                          <select
-                            {...form.register('address.country')}
-                            className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-rose-400"
-                          >
-                            <option value="">Select Country</option>
-                            <option value="United States">United States</option>
-                            <option value="Canada">Canada</option>
-                            <option value="United Kingdom">United Kingdom</option>
-                            <option value="India">India</option>
-                            <option value="Australia">Australia</option>
-                            <option value="Germany">Germany</option>
-                            <option value="France">France</option>
-                            <option value="Other">Other</option>
-                          </select>
-                          {form.formState.errors.address?.country && (
-                            <p className="mt-1 text-sm text-red-600">{form.formState.errors.address.country.message}</p>
-                          )}
-                        </div>
-                      </div>
+                    {/* Address (Optional) */}
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">
+                        Address (Optional)
+                      </label>
+                      <textarea
+                        {...form.register('address')}
+                        rows={3}
+                        placeholder="Enter your address (optional)"
+                        className="w-full resize-none rounded-lg border border-gray-300 px-4 py-3 text-gray-900 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-rose-400"
+                      />
+                      {form.formState.errors.address && (
+                        <p className="mt-1 text-sm text-red-600">{form.formState.errors.address.message}</p>
+                      )}
                     </div>
 
                     <button
                       type="submit"
-                      disabled={isLoading}
+                      disabled={isLoading || success}
                       className="w-full rounded-lg bg-gradient-to-r from-rose-600 to-amber-600 px-8 py-4 text-lg font-semibold text-white shadow-lg transition-all duration-200 hover:-translate-y-1 hover:from-rose-700 hover:to-amber-700 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isLoading ? (
@@ -477,14 +369,25 @@ export default function RegisterClient() {
                           </svg>
                           Creating Account...
                         </div>
+                      ) : success ? (
+                        'Redirecting to Book Appointment...'
                       ) : (
-                        'Create Account & Continue'
+                        'Create Account'
                       )}
                     </button>
 
                     <p className="text-center text-sm text-gray-600 dark:text-gray-400">
                       By creating an account, you agree to our Terms of Service and Privacy Policy.
                     </p>
+
+                    <div className="text-center">
+                      <Link
+                        href="/existing-patient"
+                        className="inline-flex items-center text-sm font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300"
+                      >
+                        Already have an account? Sign in here
+                      </Link>
+                    </div>
 
                     <div className="text-center">
                       <Link

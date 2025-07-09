@@ -4,6 +4,9 @@ const Appointment = require('../models/Appointment');
 const User = require('../models/User');
 const { sendAppointmentConfirmation } = require('../utils/notification');
 const { protect, authorizeHospitalManager, authorizeAdminLevel } = require('../middleware/auth');
+const { adminLimiter, appointmentSearchLimiter } = require('../middleware/rateLimit');
+const fs = require('fs');
+const path = require('path');
 
 // Import appointment controller functions
 const {
@@ -15,16 +18,200 @@ const {
   cancelAppointment
 } = require('../controllers/appointment.controller');
 
-// Controller-based routes for full functionality
-router.get('/admin', protect, authorizeHospitalManager, getAppointments);
-router.get('/admin/:id', protect, authorizeHospitalManager, getAppointment);
-router.post('/admin', protect, authorizeHospitalManager, createAppointment);
-router.put('/admin/:id', protect, authorizeHospitalManager, updateAppointment);
-router.delete('/admin/:id', protect, authorizeAdminLevel, deleteAppointment);
-router.put('/admin/:id/cancel', protect, authorizeHospitalManager, cancelAppointment);
+// Controller-based routes for full functionality - with admin rate limiter
+router.get('/admin', protect, authorizeHospitalManager, adminLimiter, getAppointments);
+router.get('/admin/:id', protect, authorizeHospitalManager, adminLimiter, getAppointment);
+router.post('/admin', protect, authorizeHospitalManager, adminLimiter, createAppointment);
+router.put('/admin/:id', protect, authorizeHospitalManager, adminLimiter, updateAppointment);
+router.delete('/admin/:id', protect, authorizeAdminLevel, adminLimiter, deleteAppointment);
+router.put('/admin/:id/cancel', protect, authorizeHospitalManager, adminLimiter, cancelAppointment);
+
+// Delete all appointments - requires admin passkey verification
+router.delete('/delete-all', protect, authorizeAdminLevel, adminLimiter, async (req, res) => {
+  try {
+    const { adminPasskey } = req.body;
+    
+    if (!adminPasskey) {
+      return res.status(400).json({
+        success: false,
+        message: 'Admin passkey is required'
+      });
+    }
+    
+    // Read the admin passkey from config file
+    const adminPasskeyPath = path.join(__dirname, '../config/admin-passkey.json');
+    
+    if (!fs.existsSync(adminPasskeyPath)) {
+      return res.status(500).json({
+        success: false,
+        message: 'Admin passkey configuration not found'
+      });
+    }
+    
+    const adminPasskeyConfig = JSON.parse(fs.readFileSync(adminPasskeyPath, 'utf8'));
+    const storedPasskey = adminPasskeyConfig.passkey;
+    
+    if (adminPasskey !== storedPasskey) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid admin passkey'
+      });
+    }
+    
+    // Delete all appointments
+    const result = await Appointment.deleteMany({});
+    
+    res.json({
+      success: true,
+      message: `Successfully deleted ${result.deletedCount} appointments`,
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('Error deleting all appointments:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete all appointments',
+      error: error.message
+    });
+  }
+});
+
+// Get appointment statistics for admin dashboard - with admin rate limiter
+router.get('/stats', protect, authorizeHospitalManager, adminLimiter, async (req, res) => {
+  try {
+    // Get appointment counts by status
+    const totalAppointments = await Appointment.countDocuments();
+    const pendingAppointments = await Appointment.countDocuments({ status: 'pending' });
+    const confirmedAppointments = await Appointment.countDocuments({ status: 'confirmed' });
+    const completedAppointments = await Appointment.countDocuments({ status: 'completed' });
+    const cancelledAppointments = await Appointment.countDocuments({ status: 'cancelled' });
+    
+    // Get appointments from the last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const recentAppointments = await Appointment.countDocuments({
+      createdAt: { $gte: thirtyDaysAgo }
+    });
+
+    // Get today's appointments
+    const today = new Date();
+    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+    
+    const todayAppointments = await Appointment.countDocuments({
+      appointmentDate: { $gte: startOfDay, $lt: endOfDay }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        total: totalAppointments,
+        pending: pendingAppointments,
+        confirmed: confirmedAppointments,
+        completed: completedAppointments,
+        cancelled: cancelledAppointments,
+        recent: recentAppointments,
+        today: todayAppointments,
+        byStatus: {
+          pending: pendingAppointments,
+          confirmed: confirmedAppointments,
+          completed: completedAppointments,
+          cancelled: cancelledAppointments
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching appointment stats:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to fetch appointment statistics' 
+    });
+  }
+});
 
 // Frontend-compatible routes (also using controller for email functionality)
 router.put('/:id', protect, authorizeHospitalManager, updateAppointment);
+
+// Get appointments by patient name and phone (no authentication required)
+// IMPORTANT: This route must come BEFORE the catch-all '/' route
+router.get('/by-name-phone', async (req, res) => {
+  try {
+    const { name, phone } = req.query;
+
+    if (!name || !phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name and phone number are required'
+      });
+    }
+
+    // Validate phone format
+    if (!/^\+91[6-9]\d{9}$/.test(phone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid Indian mobile number with +91'
+      });
+    }
+
+    // Find user by name and phone to get their userId
+    const user = await User.findOne({ 
+      name: { $regex: new RegExp(`^${name.trim()}$`, 'i') },
+      phone: phone.trim(),
+      role: 'patient'
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'No patient found with the provided name and phone number'
+      });
+    }
+
+    // Find appointments for this user
+    const appointments = await Appointment.find({ 
+      userId: user.userId 
+    }).sort({ createdAt: -1 });
+
+    if (appointments.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No appointments found for this patient'
+      });
+    }
+
+    // Transform appointments to match frontend expectations
+    const transformedAppointments = appointments.map(appointment => ({
+      _id: appointment._id,
+      appointmentDate: appointment.appointmentDate,
+      appointmentTime: appointment.appointmentTime,
+      appointmentType: appointment.appointmentType,
+      doctor: appointment.doctor,
+      symptoms: appointment.symptoms || appointment.reason || 'No symptoms provided',
+      status: appointment.status,
+      patientName: appointment.patientName || user.name,
+      patientEmail: appointment.patientEmail || user.email,
+      patientPhone: appointment.patientPhone || user.phone,
+      attachments: appointment.attachments || [], // Include medical attachments
+      userId: appointment.userId,
+      createdAt: appointment.createdAt
+    }));
+
+    res.json({
+      success: true,
+      data: transformedAppointments,
+      message: 'Appointments retrieved successfully'
+    });
+
+  } catch (error) {
+    console.error('Error fetching appointments by name and phone:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch appointments',
+      error: error.message
+    });
+  }
+});
 
 // Get all appointments (all admin levels can view)
 router.get('/', protect, authorizeHospitalManager, async (req, res) => {
@@ -55,6 +242,7 @@ router.get('/', protect, authorizeHospitalManager, async (req, res) => {
         reason: appointment.symptoms || appointment.reason || 'No reason provided',
         status: appointment.status,
         doctorName: appointment.doctor || 'TBD',
+        attachments: appointment.attachments || [], // Include medical attachments
         user: {
           id: appointment.userId || appointment.patient || 'N/A',
           firstName: patientName.split(' ')[0] || patientName,
@@ -112,6 +300,7 @@ router.get('/:id', protect, authorizeHospitalManager, async (req, res) => {
       status: appointment.status,
       doctorName: appointment.doctor || 'TBD',
       doctor: appointment.doctor,
+      attachments: appointment.attachments || [], // Include medical attachments
       user: {
         id: appointment.userId || appointment.patient || 'N/A',
         firstName: patientName.split(' ')[0] || patientName,
@@ -178,6 +367,7 @@ router.get('/public/:id', async (req, res) => {
       status: appointment.status,
       doctorName: appointment.doctor || 'TBD',
       doctor: appointment.doctor,
+      attachments: appointment.attachments || [], // Include medical attachments
       user: {
         id: appointment.userId || appointment.patient || 'N/A',
         firstName: patientName.split(' ')[0] || patientName,
@@ -359,140 +549,6 @@ router.delete('/:id', protect, authorizeAdminLevel, async (req, res) => {
   } catch (error) {
     console.error('Error deleting appointment:', error);
     res.status(500).json({ message: 'Failed to delete appointment' });
-  }
-});
-
-// Book appointment
-router.post('/book', async (req, res) => {
-  try {
-    const {
-      userId,
-      appointmentDate,
-      appointmentTime,
-      doctor,
-      appointmentType,
-      symptoms,
-      additionalNotes,
-      patientName,
-      patientEmail,
-      patientPhone,
-      userData, // New field for temporary user data
-      isTempUser // Flag to indicate if this is a temporary user
-    } = req.body;
-
-
-    // Validate required fields
-    if (!userId || !appointmentDate || !appointmentTime || !doctor || !appointmentType || !symptoms) {
-      return res.status(400).json({
-        success: false,
-        message: 'Missing required fields'
-      });
-    }
-
-    let finalUserId = userId;
-    let createdUser = null;
-
-    // If this is a temporary user, create the actual user account first
-    if (isTempUser && userData) {
-      try {
-        // Check if user already exists by email
-        const existingUser = await User.findOne({ email: userData.email });
-        
-        if (existingUser) {
-          // Use existing user
-          finalUserId = existingUser.userId;
-          createdUser = existingUser;
-        } else {
-          // Create new user account
-          const newUser = new User({
-            firstName: userData.firstName,
-            lastName: userData.lastName,
-            email: userData.email,
-            phone: userData.phone,
-            dateOfBirth: userData.dateOfBirth,
-            gender: userData.gender,
-            role: 'patient',
-            emailVerified: true, // Auto-verify for simplified app
-            password: Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) // Generate random password
-          });
-          
-          await newUser.save();
-          finalUserId = newUser.userId; // Use the generated 8-digit userId
-          createdUser = newUser;
-        }
-      } catch (userError) {
-        console.error('Error creating user account:', userError);
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to create user account',
-          error: userError.message
-        });
-      }
-    }
-
-    // Create appointment
-    const appointment = new Appointment({
-      userId: finalUserId, // Use the final userId (either existing or newly created)
-      appointmentDate,
-      appointmentTime,
-      doctor,
-      appointmentType,
-      symptoms,
-      additionalNotes,
-      patientName,
-      patientEmail,
-      patientPhone,
-      status: 'pending'
-    });
-
-    await appointment.save();
-
-
-    // Send confirmation email if user was created
-    if (createdUser) {
-      try {
-        const mockDoctor = {
-          firstName: doctor.split(' ')[1] || 'Doctor',
-          lastName: doctor.split(' ')[0] || 'Unknown'
-        };
-        await sendAppointmentConfirmation(appointment, createdUser, mockDoctor);
-      } catch (emailError) {
-        console.warn(`Failed to send confirmation email: ${emailError.message}`);
-      }
-    }
-
-    res.status(201).json({
-      success: true,
-      message: 'Appointment booked successfully',
-      appointment: {
-        _id: appointment._id,
-        userId: appointment.userId,
-        appointmentDate: appointment.appointmentDate,
-        appointmentTime: appointment.appointmentTime,
-        doctor: appointment.doctor,
-        appointmentType: appointment.appointmentType,
-        status: appointment.status
-      },
-      user: createdUser ? {
-        id: createdUser._id,
-        userId: createdUser.userId,
-        email: createdUser.email,
-        firstName: createdUser.firstName,
-        lastName: createdUser.lastName,
-        role: createdUser.role,
-        phone: createdUser.phone,
-        dateOfBirth: createdUser.dateOfBirth,
-        gender: createdUser.gender
-      } : undefined
-    });
-
-  } catch (error) {
-    console.error('Error booking appointment:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to book appointment',
-      error: error.message
-    });
   }
 });
 
@@ -691,6 +747,96 @@ router.get('/debug/all', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch appointments',
+      error: error.message
+    });
+  }
+});
+
+// Debug endpoint to check if appointments exist
+router.get('/debug/count', async (req, res) => {
+  try {
+    const appointmentCount = await Appointment.countDocuments();
+    const sampleAppointments = await Appointment.find().limit(3);
+    
+    res.json({
+      success: true,
+      data: {
+        totalAppointments: appointmentCount,
+        sampleAppointments: sampleAppointments.map(apt => ({
+          id: apt._id,
+          status: apt.status,
+          appointmentDate: apt.appointmentDate,
+          patientName: apt.patientName,
+          createdAt: apt.createdAt
+        }))
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error checking appointments',
+      error: error.message
+    });
+  }
+});
+
+// Seed sample data for testing (only if no appointments exist)
+router.post('/debug/seed', async (req, res) => {
+  try {
+    const existingCount = await Appointment.countDocuments();
+    
+    if (existingCount > 0) {
+      return res.json({
+        success: true,
+        message: `${existingCount} appointments already exist. No seeding needed.`
+      });
+    }
+
+    // Create sample appointments
+    const sampleAppointments = [
+      {
+        patientName: 'John Doe',
+        patientEmail: 'john@example.com',
+        patientPhone: '+1234567890',
+        appointmentDate: new Date(),
+        appointmentTime: '10:00 AM',
+        appointmentType: 'General Consultation',
+        symptoms: 'Regular checkup',
+        status: 'pending'
+      },
+      {
+        patientName: 'Jane Smith',
+        patientEmail: 'jane@example.com',
+        patientPhone: '+1234567891',
+        appointmentDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
+        appointmentTime: '2:00 PM',
+        appointmentType: 'Follow-up',
+        symptoms: 'Follow-up consultation',
+        status: 'confirmed'
+      },
+      {
+        patientName: 'Bob Johnson',
+        patientEmail: 'bob@example.com',
+        patientPhone: '+1234567892',
+        appointmentDate: new Date(Date.now() - 24 * 60 * 60 * 1000), // Yesterday
+        appointmentTime: '9:00 AM',
+        appointmentType: 'Urgent Care',
+        symptoms: 'Urgent health concern',
+        status: 'completed'
+      }
+    ];
+
+    const created = await Appointment.insertMany(sampleAppointments);
+    
+    res.json({
+      success: true,
+      message: `Created ${created.length} sample appointments`,
+      data: created
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error seeding data',
       error: error.message
     });
   }

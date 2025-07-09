@@ -1,26 +1,34 @@
 import Image from 'next/image';
 
+import { ICONS } from '@/constants/cloudinary-assets';
+
 import { Button } from './ui/button';
 
-interface ButtonProps {
+interface SubmitButtonProps {
   isLoading: boolean;
   className?: string;
   children: React.ReactNode;
+  loadingText?: string;
 }
 
-const SubmitButton = ({ isLoading, className, children }: ButtonProps) => {
+export const SubmitButton = ({
+  isLoading,
+  className,
+  children,
+  loadingText = 'Loading...',
+}: SubmitButtonProps) => {
   return (
     <Button type="submit" disabled={isLoading} className={className ?? 'shad-primary-btn w-full'}>
       {isLoading ? (
-        <div className="flex items-center gap-4">
+        <div className="flex items-center space-x-3">
           <Image
-            src="https://res.cloudinary.com/dgvs3l5yo/image/upload/v1751455266/healthcare/icons/healthcare/icons/loader.svg"
-            alt="loader"
+            src={ICONS['loader.svg']}
+            alt="loading"
             width={24}
             height={24}
             className="animate-spin"
           />
-          Loading...
+          <span>{loadingText}</span>
         </div>
       ) : (
         children
@@ -28,5 +36,3 @@ const SubmitButton = ({ isLoading, className, children }: ButtonProps) => {
     </Button>
   );
 };
-
-export default SubmitButton;

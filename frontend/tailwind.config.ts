@@ -6,7 +6,7 @@ const config = {
   darkMode: ['class'],
   content: [
     './pages/**/*.{ts,tsx}',
-    './components/**/*.{ts,tsx}',
+    './frontend/components/**/*.{ts,tsx}',
     './app/**/*.{ts,tsx}',
     './src/**/*.{ts,tsx}',
   ],
@@ -156,6 +156,22 @@ const config = {
             transform: 'translate(0px, 0px) scale(1)',
           },
         },
+        blob1: {
+          '0%': { transform: 'translateY(0) scale(1)' },
+          '100%': { transform: 'translateY(40px) scale(1.1)' },
+        },
+        blob2: {
+          '0%': { transform: 'translateY(0) scale(1)' },
+          '100%': { transform: 'translateY(-30px) scale(1.05)' },
+        },
+        blob3: {
+          '0%': { transform: 'translateY(0) scale(1)' },
+          '100%': { transform: 'translateY(30px) scale(1.08)' },
+        },
+        fadein: {
+          from: { opacity: '0', transform: 'translateY(16px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
         'gradient-move': {
           '0%': { backgroundPosition: '0% 50%' },
           '50%': { backgroundPosition: '100% 50%' },
@@ -170,10 +186,14 @@ const config = {
         'float-delayed': 'float 6s ease-in-out 2s infinite',
         'float-slow': 'float 8s ease-in-out 1s infinite',
         blob: 'blob 7s infinite',
+        blob1: 'blob1 18s infinite linear alternate',
+        blob2: 'blob2 22s infinite linear alternate',
+        blob3: 'blob3 20s infinite linear alternate',
         'gradient-move': 'gradient-move 15s ease infinite',
         'fade-in': 'fade-in 0.5s ease-out',
         'fade-in-up': 'fade-in-up 0.5s ease-out',
         'slide-up': 'slide-up 0.5s ease-out',
+        fadein: 'fadein 0.7s cubic-bezier(.4,0,.2,1) both',
       },
     },
   },

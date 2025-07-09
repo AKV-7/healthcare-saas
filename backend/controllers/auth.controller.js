@@ -87,83 +87,105 @@ const sendTokenResponse = (user, statusCode, res) => {
     });
 };
 
-// @desc    Register user
+// @desc    Register user (simplified version without password)
 // @route   POST /api/auth/register
 // @access  Public
 const register = async (req, res) => {
   try {
-    const { email, firstName, lastName, role, phone, dateOfBirth, gender } = req.body;
+    const { name, email, phone, age, gender, address } = req.body;
 
-    // Check if user already exists
-    const existingUser = await User.findByEmail(email);
-    if (existingUser) {
+    // Validation (address is optional)
+    if (!name || !email || !phone || !age || !gender) {
       return res.status(400).json({
         success: false,
-        message: 'User already exists with this email',
+        message: 'Name, email, phone, age, and gender are required',
         code: 'AUTH_001'
       });
     }
 
-    // Create user without password for simplified app
-    const user = await User.create({
-      email,
-      password: 'NO_PASSWORD_REQUIRED', // Temporary password that will be hashed
-      firstName,
-      lastName,
-      role: role || 'patient',
-      phone,
-      dateOfBirth,
-      gender,
-      emailVerified: true, // Auto-verify for simplified app
-      verificationToken: undefined,
-      verificationTokenExpires: undefined
-    });
-
-    // Update last login
-    user.lastLogin = new Date();
-    await user.save();
-
-    // Add user to Brevo contacts
-    try {
-      const SibApiV3Sdk = require('@sendinblue/client');
-      const brevoClient = new SibApiV3Sdk.ContactsApi();
-      brevoClient.setApiKey(SibApiV3Sdk.ContactsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
-      await brevoClient.createContact({
-        email: user.email,
-        attributes: {
-          FIRSTNAME: user.firstName,
-          LASTNAME: user.lastName
-        },
-        updateEnabled: true // Update if contact already exists
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email address',
+        code: 'AUTH_002'
       });
-    } catch (err) {
-      console.error('Failed to add user to Brevo contacts:', err.message);
     }
 
+    // Validate phone format (Indian mobile number)
+    const phoneRegex = /^\+91[6-9]\d{9}$/;
+    if (!phoneRegex.test(phone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid Indian mobile number with +91',
+        code: 'AUTH_003'
+      });
+    }
 
-    authLogger.info(`New user registered: ${user.email} with role: ${user.role}`);
+    // Validate age
+    const ageNum = parseInt(age);
+    if (isNaN(ageNum) || ageNum < 1 || ageNum > 120) {
+      return res.status(400).json({
+        success: false,
+        message: 'Age must be between 1 and 120 years',
+        code: 'AUTH_004'
+      });
+    }
 
-    // Return user data with 8-digit userId for simplified app
+    // Check if user already exists
+    const existingUser = await User.findOne({
+      $or: [{ email: email.toLowerCase().trim() }, { phone: phone.trim() }]
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'User with this email or phone number already exists',
+        code: 'AUTH_005'
+      });
+    }
+
+    // Generate unique userId
+    const { v4: uuidv4 } = require('uuid');
+    const userId = uuidv4();
+
+    // Create user without password for simplified registration
+    const user = await User.create({
+      userId,
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      phone: phone.trim(),
+      age: ageNum,
+      gender,
+      address: address ? address.trim() : undefined, // Include address if provided
+      role: 'patient', // Explicitly set role for simplified registration
+      isVerified: true, // Auto-verify for simplified registration
+      registrationDate: new Date()
+    });
+
+    authLogger.info(`New user registered: ${user.email} (simplified registration)`);
+
+    // Return user data
     res.status(201).json({
       success: true,
-      user: {
-        id: user._id,
-        userId: user.userId, // 8-digit userId
+      message: 'Registration successful',
+      data: {
+        userId: user.userId,
+        name: user.name,
         email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
         phone: user.phone,
-        dateOfBirth: user.dateOfBirth,
-        gender: user.gender
+        age: user.age,
+        gender: user.gender,
+        address: user.address
       }
     });
   } catch (error) {
     authLogger.error('Registration error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error creating user',
-      code: 'AUTH_002',
+      message: 'Internal server error during registration',
+      code: 'AUTH_006',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

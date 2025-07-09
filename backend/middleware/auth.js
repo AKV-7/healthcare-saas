@@ -24,6 +24,24 @@ const protect = async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+    // Handle admin session tokens
+    if (decoded.type === 'admin_session' && decoded.role === 'admin') {
+      req.user = {
+        role: 'admin',
+        type: 'admin_session',
+        isActive: true
+      };
+      return next();
+    }
+
+    // Handle regular user tokens
+    if (!decoded.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid token format'
+      });
+    }
+
     // Get user from token
     const user = await User.findById(decoded.id).select('-password');
 
@@ -216,6 +234,12 @@ const authorizeAdmin = (requiredLevel = 2) => {
         success: false,
         message: 'Not authorized to access this route'
       });
+    }
+
+    // Handle admin session tokens (from admin login passkey)
+    if (req.user.type === 'admin_session' && req.user.role === 'admin') {
+      // Admin session tokens have full access
+      return next();
     }
 
     // Check if user is an admin type

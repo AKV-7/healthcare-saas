@@ -16,11 +16,10 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 
 import { SimpleNavButton } from '@/components/SimpleNavButton';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-
-import { Alert, AlertDescription } from '../../components/ui/alert';
 
 interface AppointmentStatus {
   _id: string;
@@ -45,7 +44,7 @@ interface ApiResponse {
 }
 
 export default function Page() {
-  const [userId, setUserId] = useState('');
+  const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [appointments, setAppointments] = useState<AppointmentStatus[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,20 +62,20 @@ export default function Page() {
   const validateInputs = useCallback(() => {
     const errors: string[] = [];
 
-    if (!userId.trim()) {
-      errors.push('User ID is required');
-    } else if (!/^\d{8}$/.test(userId.trim())) {
-      errors.push('User ID must be exactly 8 digits');
+    if (!name.trim()) {
+      errors.push('Name is required');
+    } else if (name.trim().length < 2) {
+      errors.push('Name must be at least 2 characters');
     }
 
     if (!phone.trim()) {
       errors.push('Phone number is required');
-    } else if (!/^(\+91)?[6-9]\d{9}$/.test(phone.trim())) {
-      errors.push('Please enter a valid Indian phone number');
+    } else if (!/^\+91[6-9]\d{9}$/.test(phone.trim())) {
+      errors.push('Please enter a valid Indian phone number with +91');
     }
 
     return errors;
-  }, [userId, phone]);
+  }, [name, phone]);
 
   // Rate limiting check
   const checkRateLimit = useCallback(() => {
@@ -115,7 +114,7 @@ export default function Page() {
       // Add cache-busting parameter and security headers
       const timestamp = new Date().getTime();
       const response = await fetch(
-        `/api/appointments/user/${userId.trim()}?phone=${encodeURIComponent(phone.trim())}&t=${timestamp}`,
+        `/api/appointments/by-name-phone?name=${encodeURIComponent(name.trim())}&phone=${encodeURIComponent(phone.trim())}&t=${timestamp}`,
         {
           method: 'GET',
           headers: {
@@ -150,7 +149,7 @@ export default function Page() {
           const dateB = new Date(b.createdAt);
           return dateB.getTime() - dateA.getTime(); // Descending order (latest first)
         });
-        
+
         setAppointments(sortedAppointments);
         if (sortedAppointments.length === 0) {
           setError('No appointments found for this user. Please check your details.');
@@ -191,7 +190,7 @@ export default function Page() {
       setLoading(false);
       setIsSubmitting(false);
     }
-  }, [userId, phone, validateInputs, checkRateLimit]);
+  }, [name, phone, validateInputs, checkRateLimit]);
 
   // Handle form submission
   const handleSubmit = useCallback(
@@ -207,7 +206,7 @@ export default function Page() {
     if (error) {
       setError('');
     }
-  }, [userId, phone, error]);
+  }, [name, phone, error]);
 
   // Auto-focus on first input
   useEffect(() => {
@@ -344,101 +343,111 @@ export default function Page() {
                         Find My Appointments
                       </CardTitle>
                     </CardHeader>
-                  <CardContent className="p-8">
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <label
-                            htmlFor="userId"
-                            className="mb-2 flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200"
-                          >
-                            <User
-                              className="mr-2 size-4 text-rose-600 dark:text-rose-400"
-                              aria-hidden="true"
+                    <CardContent className="p-8">
+                      <form onSubmit={handleSubmit} className="space-y-6">
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <label
+                              htmlFor="name"
+                              className="mb-2 flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200"
+                            >
+                              <User
+                                className="mr-2 size-4 text-rose-600 dark:text-rose-400"
+                                aria-hidden="true"
+                              />
+                              Full Name
+                            </label>
+                            <Input
+                              id="name"
+                              type="text"
+                              placeholder="Enter your full name"
+                              value={name}
+                              onChange={(e) => setName(e.target.value)}
+                              className="h-12 w-full border-gray-300 bg-white text-base transition-all duration-200 focus:border-rose-500 focus:ring-rose-500 dark:border-rose-900/40 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-rose-400 dark:focus:ring-rose-400"
+                              disabled={loading}
+                              aria-describedby="name-help"
+                              required
                             />
-                            User ID
-                          </label>
-                          <Input
-                            id="userId"
-                            type="text"
-                            placeholder="Enter your 8-digit User ID"
-                            value={userId}
-                            onChange={(e) =>
-                              setUserId(e.target.value.replace(/\D/g, '').slice(0, 8))
-                            }
-                            className="h-12 w-full border-gray-300 bg-white text-base transition-all duration-200 focus:border-rose-500 focus:ring-rose-500 dark:border-rose-900/40 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-rose-400 dark:focus:ring-rose-400"
-                            disabled={loading}
-                            aria-describedby="userId-help"
-                            maxLength={8}
-                            pattern="[0-9]{8}"
-                            required
-                          />
-                          <p id="userId-help" className="text-sm text-gray-500 dark:text-gray-400">
-                            Enter exactly 8 digits
-                          </p>
-                        </div>
-                        <div className="space-y-2">
-                          <label
-                            htmlFor="phone"
-                            className="mb-2 flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200"
-                          >
-                            <Phone
-                              className="mr-2 size-4 text-rose-600 dark:text-rose-400"
-                              aria-hidden="true"
+                            <p id="name-help" className="text-sm text-gray-500 dark:text-gray-400">
+                              Enter the same name you used during registration
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <label
+                              htmlFor="phone"
+                              className="mb-2 flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200"
+                            >
+                              <Phone
+                                className="mr-2 size-4 text-rose-600 dark:text-rose-400"
+                                aria-hidden="true"
+                              />
+                              Phone Number
+                            </label>
+                            <Input
+                              id="phone"
+                              type="tel"
+                              placeholder="+91 9876543210"
+                              value={phone}
+                              onChange={(e) => {
+                                let value = e.target.value;
+                                // Remove all non-digits
+                                const digits = value.replace(/\D/g, '');
+
+                                // Format for Indian mobile numbers
+                                if (digits.startsWith('91')) {
+                                  value = '+' + digits;
+                                } else if (digits.length === 10) {
+                                  value = '+91' + digits;
+                                } else if (!value.startsWith('+91')) {
+                                  value = '+91';
+                                }
+
+                                setPhone(value);
+                              }}
+                              className="h-12 w-full border-gray-300 bg-white text-base transition-all duration-200 focus:border-rose-500 focus:ring-rose-500 dark:border-rose-900/40 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-rose-400 dark:focus:ring-rose-400"
+                              disabled={loading}
+                              aria-describedby="phone-help"
+                              required
                             />
-                            Phone Number
-                          </label>
-                          <Input
-                            id="phone"
-                            type="tel"
-                            placeholder="Enter your phone number"
-                            value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
-                            className="h-12 w-full border-gray-300 bg-white text-base transition-all duration-200 focus:border-rose-500 focus:ring-rose-500 dark:border-rose-900/40 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-rose-400 dark:focus:ring-rose-400"
-                            disabled={loading}
-                            aria-describedby="phone-help"
-                            pattern="(\+91)?[6-9]\d{9}"
-                            required
-                          />
-                          <p id="phone-help" className="text-sm text-gray-500 dark:text-gray-400">
-                            Enter a valid Indian phone number
-                          </p>
+                            <p id="phone-help" className="text-sm text-gray-500 dark:text-gray-400">
+                              Enter a valid Indian phone number with +91
+                            </p>
+                          </div>
                         </div>
-                      </div>
 
-                      <Button
-                        type="submit"
-                        disabled={loading || isSubmitting}
-                        className="h-12 w-full bg-gradient-to-r from-rose-600 to-amber-600 text-base font-semibold text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:from-rose-700 hover:to-amber-700 hover:shadow-xl disabled:transform-none disabled:cursor-not-allowed disabled:opacity-50 dark:from-rose-800 dark:to-amber-800 dark:hover:from-rose-700 dark:hover:to-amber-700"
-                        aria-describedby="submit-status"
-                      >
-                        {loading ? (
-                          <div className="flex items-center justify-center">
-                            <div className="mr-3 size-5 animate-spin rounded-full border-b-2 border-white"></div>
-                            Finding Appointments...
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-center">
-                            <Search className="mr-3 size-5" aria-hidden="true" />
-                            Find Appointments
-                          </div>
-                        )}
-                      </Button>
-                      <div id="submit-status" className="sr-only" aria-live="polite">
-                        {loading ? 'Searching for appointments...' : 'Ready to search'}
-                      </div>
-                    </form>
+                        <Button
+                          type="submit"
+                          disabled={loading || isSubmitting}
+                          className="h-12 w-full bg-gradient-to-r from-rose-600 to-amber-600 text-base font-semibold text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:from-rose-700 hover:to-amber-700 hover:shadow-xl disabled:transform-none disabled:cursor-not-allowed disabled:opacity-50 dark:from-rose-800 dark:to-amber-800 dark:hover:from-rose-700 dark:hover:to-amber-700"
+                          aria-describedby="submit-status"
+                        >
+                          {loading ? (
+                            <div className="flex items-center justify-center">
+                              <div className="mr-3 size-5 animate-spin rounded-full border-b-2 border-white"></div>
+                              Finding Appointments...
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center">
+                              <Search className="mr-3 size-5" aria-hidden="true" />
+                              Find Appointments
+                            </div>
+                          )}
+                        </Button>
+                        <div id="submit-status" className="sr-only" aria-live="polite">
+                          {loading ? 'Searching for appointments...' : 'Ready to search'}
+                        </div>
+                      </form>
 
-                    {error && (
-                      <Alert className="mt-6 border-rose-200 bg-rose-50 dark:border-rose-900/40 dark:bg-rose-900/30">
-                        <AlertTriangle className="size-4 text-rose-600 dark:text-rose-400" />
-                        <AlertDescription className="font-medium text-rose-700 dark:text-rose-300">
-                          {error}
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </CardContent>
-                </Card>
+                      {error && (
+                        <Alert className="mt-6 border-rose-200 bg-rose-50 dark:border-rose-900/40 dark:bg-rose-900/30">
+                          <AlertTriangle className="size-4 text-rose-600 dark:text-rose-400" />
+                          <AlertDescription className="font-medium text-rose-700 dark:text-rose-300">
+                            {error}
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
                 {/* Appointments List */}
                 {appointments.length > 0 && (

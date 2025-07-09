@@ -5,6 +5,7 @@ const { protect, authorizeHospitalManager, authorizeAdminLevel, authorize } = re
 const Appointment = require('../models/Appointment');
 const User = require('../models/User');
 const { logger } = require('../utils/logger');
+const { adminLimiter } = require('../middleware/rateLimit');
 
 const router = express.Router();
 
@@ -27,7 +28,7 @@ const validateDateRange = [
 // @desc    Get dashboard overview
 // @route   GET /api/analytics/dashboard
 // @access  Private/Admin (all levels)
-router.get('/dashboard', protect, authorizeHospitalManager, async (req, res) => {
+router.get('/dashboard', protect, authorizeHospitalManager, adminLimiter, async (req, res) => {
   try {
     // Get appointment counts by status
     const totalAppointments = await Appointment.countDocuments();
@@ -103,7 +104,7 @@ router.get('/dashboard', protect, authorizeHospitalManager, async (req, res) => 
 // @desc    Get system statistics
 // @route   GET /api/analytics/system-stats
 // @access  Private/Admin (admin and super_admin only)
-router.get('/system-stats', protect, authorizeAdminLevel, async (req, res) => {
+router.get('/system-stats', protect, authorizeAdminLevel, adminLimiter, async (req, res) => {
   try {
     const result = await AnalyticsService.getSystemStats();
     
@@ -129,7 +130,7 @@ router.get('/system-stats', protect, authorizeAdminLevel, async (req, res) => {
 // @desc    Get appointment statistics
 // @route   GET /api/analytics/appointment-stats
 // @access  Private/Admin (all levels)
-router.get('/appointment-stats', protect, authorizeHospitalManager, validateDateRange, async (req, res) => {
+router.get('/appointment-stats', protect, authorizeHospitalManager, adminLimiter, validateDateRange, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     
@@ -167,7 +168,7 @@ router.get('/appointment-stats', protect, authorizeHospitalManager, validateDate
 // @desc    Get doctor performance statistics
 // @route   GET /api/analytics/doctor-performance
 // @access  Private/Admin (admin and super_admin only)
-router.get('/doctor-performance', protect, authorizeAdminLevel, validateDateRange, async (req, res) => {
+router.get('/doctor-performance', protect, authorizeAdminLevel, adminLimiter, validateDateRange, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     
@@ -205,7 +206,7 @@ router.get('/doctor-performance', protect, authorizeAdminLevel, validateDateRang
 // @desc    Get patient statistics
 // @route   GET /api/analytics/patient-stats
 // @access  Private/Admin/Doctor
-router.get('/patient-stats', protect, authorize('admin', 'doctor'), async (req, res) => {
+router.get('/patient-stats', protect, authorize('admin', 'doctor'), adminLimiter, async (req, res) => {
   try {
     const result = await AnalyticsService.getPatientStats();
     
@@ -231,7 +232,7 @@ router.get('/patient-stats', protect, authorize('admin', 'doctor'), async (req, 
 // @desc    Get revenue statistics
 // @route   GET /api/analytics/revenue-stats
 // @access  Private/Admin
-router.get('/revenue-stats', protect, authorize('admin'), validateDateRange, async (req, res) => {
+router.get('/revenue-stats', protect, authorize('admin'), adminLimiter, validateDateRange, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     

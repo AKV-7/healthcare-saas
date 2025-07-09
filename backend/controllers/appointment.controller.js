@@ -16,7 +16,7 @@ const getAppointments = async (req, res) => {
 
     // Role-based filtering
     if (req.user.role === 'patient') {
-      query.patient = req.user.id;
+      query.userId = req.user.id;
     } else if (req.user.role === 'doctor') {
       query.doctor = req.user.id;
     }
@@ -42,30 +42,54 @@ const getAppointments = async (req, res) => {
     }
 
     if (patientId && patientId !== '' && (req.user.role === 'admin' || req.user.role === 'doctor')) {
-      query.patient = patientId;
+      query.userId = patientId;
     }
 
     const skip = (page - 1) * limit;
 
     const appointments = await Appointment.find(query)
-      .populate('patient', 'firstName lastName email phone')
-      .populate('doctor', 'firstName lastName email phone')
       .sort({ createdAt: -1 }) // Sort by creation date, latest first
       .skip(skip)
       .limit(parseInt(limit));
 
     const total = await Appointment.countDocuments(query);
 
+    // Transform the data to match frontend expectations
+    const transformedAppointments = appointments.map(appointment => {
+      // Handle both old and new schema formats
+      const patientName = appointment.patientName || 'Unknown Patient';
+      const patientEmail = appointment.patientEmail || 'unknown@email.com';
+      const patientPhone = appointment.patientPhone || 'Unknown Phone';
+      return {
+        id: appointment._id,
+        appointmentDate: appointment.appointmentDate,
+        appointmentTime: appointment.appointmentTime,
+        appointmentType: appointment.appointmentType,
+        reason: appointment.symptoms || 'No reason provided',
+        status: appointment.status,
+        doctorName: appointment.doctor || 'TBD',
+        attachments: appointment.attachments || [], // Include medical attachments
+        user: {
+          id: appointment.userId || 'N/A',
+          firstName: patientName.split(' ')[0] || patientName,
+          lastName: patientName.split(' ').slice(1).join(' ') || '',
+          email: patientEmail,
+          phone: patientPhone
+        },
+        createdAt: appointment.createdAt
+      };
+    });
+
     res.status(200).json({
       success: true,
-      count: appointments.length,
+      count: transformedAppointments.length,
       total,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
         pages: Math.ceil(total / limit)
       },
-      data: appointments
+      data: transformedAppointments
     });
   } catch (error) {
     logger.error('Get appointments error:', error);
@@ -81,9 +105,7 @@ const getAppointments = async (req, res) => {
 // @access  Private
 const getAppointment = async (req, res) => {
   try {
-    const appointment = await Appointment.findById(req.params.id)
-      .populate('patient', 'firstName lastName email phone dateOfBirth gender')
-      .populate('doctor', 'firstName lastName email phone');
+    const appointment = await Appointment.findById(req.params.id);
 
     if (!appointment) {
       return res.status(404).json({
@@ -93,8 +115,8 @@ const getAppointment = async (req, res) => {
     }
 
     // Check access permissions
-    const isOwner = appointment.patient._id.toString() === req.user.id || 
-                   appointment.doctor._id.toString() === req.user.id;
+    const isOwner = appointment.userId === req.user.id || 
+                   appointment.doctor === req.user.id;
     
     if (!isOwner && req.user.role !== 'admin') {
       return res.status(403).json({
@@ -103,9 +125,33 @@ const getAppointment = async (req, res) => {
       });
     }
 
+    // Transform the data to match frontend expectations
+    const patientName = appointment.patientName || 'Unknown Patient';
+    const patientEmail = appointment.patientEmail || 'unknown@email.com';
+    const patientPhone = appointment.patientPhone || 'Unknown Phone';
+    
+    const transformedAppointment = {
+      id: appointment._id,
+      appointmentDate: appointment.appointmentDate,
+      appointmentTime: appointment.appointmentTime,
+      appointmentType: appointment.appointmentType,
+      reason: appointment.symptoms || 'No reason provided',
+      status: appointment.status,
+      doctorName: appointment.doctor || 'TBD',
+      attachments: appointment.attachments || [], // Include medical attachments
+      user: {
+        id: appointment.userId || 'N/A',
+        firstName: patientName.split(' ')[0] || patientName,
+        lastName: patientName.split(' ').slice(1).join(' ') || '',
+        email: patientEmail,
+        phone: patientPhone
+      },
+      createdAt: appointment.createdAt
+    };
+
     res.status(200).json({
       success: true,
-      data: appointment
+      data: transformedAppointment
     });
   } catch (error) {
     logger.error('Get appointment error:', error);
@@ -203,7 +249,7 @@ const createAppointment = async (req, res) => {
     });
 
     const populatedAppointment = await Appointment.findById(appointment._id)
-      .populate('patient', 'firstName lastName email phone')
+      .populate('patient', 'name email phone')
       .populate('doctor', 'firstName lastName email phone');
 
     logger.info(`New appointment created: ${appointment._id} by patient: ${req.user.email}`);
@@ -218,6 +264,7 @@ const createAppointment = async (req, res) => {
         appointment: {
           date: appointmentDateObj.toLocaleDateString(),
           time: appointmentTime,
+          type: appointmentType,
           doctorName: `${doctor.firstName} ${doctor.lastName}`,
           location: doctor.clinicAddress || 'Clinic'
         }
@@ -238,7 +285,7 @@ const createAppointment = async (req, res) => {
         'New Appointment Request',
         `
         <h3>New Appointment Request</h3>
-        <p>You have a new appointment request from ${populatedAppointment.patient.firstName} ${populatedAppointment.patient.lastName}.</p>
+        <p>You have a new appointment request from ${populatedAppointment.patient.name}.</p>
         <p><strong>Date:</strong> ${appointmentDateObj.toLocaleDateString()}</p>
         <p><strong>Time:</strong> ${appointmentTime}</p>
         <p><strong>Type:</strong> ${appointmentType}</p>
@@ -314,16 +361,16 @@ const updateAppointment = async (req, res) => {
 
       // Prepare user object from appointment data
       const user = {
-        firstName: appointment.patientName.split(' ')[0] || appointment.patientName,
-        lastName: appointment.patientName.split(' ').slice(1).join(' ') || '',
+        name: appointment.patientName,
         email: appointment.patientEmail,
-        userId: appointment.userId
+        phone: appointment.patientPhone
       };
 
       // Prepare appointment data for email templates
       const appointmentData = {
         date: appointment.appointmentDate.toLocaleDateString(),
         time: appointment.appointmentTime,
+        type: appointment.appointmentType,
         doctorName: appointment.doctor,
         location: 'Khushi Homoeopathic Clinic'
       };
@@ -339,9 +386,6 @@ const updateAppointment = async (req, res) => {
         
         await sendMail({
           to: appointment.patientEmail,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          phone: appointment.patientPhone,
           subject: emailContent.subject,
           text: `Your appointment status has been updated to: ${status}`,
           html: emailContent.html
@@ -372,9 +416,6 @@ const updateAppointment = async (req, res) => {
           });
           await sendMail({
             to: appointment.patientEmail,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            phone: appointment.patientPhone,
             subject: emailContent.subject,
             html: emailContent.html
           });
@@ -532,8 +573,8 @@ const cancelAppointment = async (req, res) => {
         appointment: {
           date: appointment.appointmentDate.toLocaleDateString(),
           time: appointment.appointmentTime,
-          doctorName: `${appointment.doctor.firstName} ${appointment.doctor.lastName}`,
-          location: appointment.doctor.clinicAddress || 'Clinic'
+          type: appointment.appointmentType,
+          doctorName: `${appointment.doctor.firstName} ${appointment.doctor.lastName}`
         }
       });
       await sendMail({

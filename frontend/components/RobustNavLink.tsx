@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface NavLinkProps {
   href: string;
@@ -19,40 +19,33 @@ export function RobustNavLink({ href, children, className = '', isAnchor = false
     setMounted(true);
   }, []);
 
-  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+  const handleClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     
     if (!mounted) return;
     
-    try {
-      if (isAnchor && href.startsWith('#')) {
-        // Handle anchor links
-        const element = document.getElementById(href.slice(1));
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth' });
-        } else {
-          // If element not found and we're not on home page, go to home first
-          if (window.location.pathname !== '/') {
-            window.location.href = `/${href}`;
-          }
-        }
-      } else {
-        // Handle regular navigation
-        try {
-          router.push(href);
-        } catch (error) {
-          console.warn('Router.push failed, using fallback:', error);
-          window.location.href = href;
-        }
+    if (isAnchor && href.startsWith('#')) {
+      // Handle anchor links
+      const element = document.getElementById(href.slice(1));
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      } else if (window.location.pathname !== '/') {
+        // If element not found and we're not on home page, go to home first
+        window.location.href = `/${href}`;
       }
-    } catch (error) {
-      console.warn('Navigation error, using fallback:', error);
+      return;
+    }
+
+    // Handle regular navigation
+    try {
+      router.push(href);
+    } catch {
       window.location.href = href;
     }
-  };
+  }, [mounted, router, href, isAnchor]);
 
+  // Return regular anchor tag during SSR
   if (!mounted) {
-    // Return regular anchor tag during SSR
     return (
       <a href={href} className={className}>
         {children}
@@ -66,5 +59,3 @@ export function RobustNavLink({ href, children, className = '', isAnchor = false
     </Link>
   );
 }
-
-export default RobustNavLink;

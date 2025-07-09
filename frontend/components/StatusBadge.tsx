@@ -4,23 +4,27 @@ import Image from 'next/image';
 import { StatusIcon } from '@/constants';
 import { Appointment } from '@/lib/api';
 
-export const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
+type AppointmentStatus = Appointment['status'];
+
+const STATUS_COLORS: Record<AppointmentStatus, { bg: string; text: string }> = {
+  confirmed: { bg: 'bg-green-600', text: 'text-green-500' },
+  completed: { bg: 'bg-green-600', text: 'text-green-500' },
+  pending: { bg: 'bg-blue-600', text: 'text-blue-500' },
+  cancelled: { bg: 'bg-red-600', text: 'text-red-500' },
+  'no-show': { bg: 'bg-red-600', text: 'text-red-500' },
+};
+
+interface StatusBadgeProps {
+  status: AppointmentStatus;
+}
+
+export const StatusBadge = ({ status }: StatusBadgeProps) => {
+  const colors = STATUS_COLORS[status];
+
   return (
-    <div
-      className={clsx('status-badge', {
-        'bg-green-600': status === 'confirmed' || status === 'completed',
-        'bg-blue-600': status === 'pending',
-        'bg-red-600': status === 'cancelled' || status === 'no-show',
-      })}
-    >
-      <Image src={StatusIcon[status]} alt="status" width={24} height={24} className="h-fit w-3" />
-      <p
-        className={clsx('text-12-semibold capitalize', {
-          'text-green-500': status === 'confirmed' || status === 'completed',
-          'text-blue-500': status === 'pending',
-          'text-red-500': status === 'cancelled' || status === 'no-show',
-        })}
-      >
+    <div className={clsx('status-badge', colors.bg)}>
+      <Image src={StatusIcon[status]} alt={status} width={24} height={24} className="size-3" />
+      <p className={clsx('text-xs font-semibold capitalize', colors.text)}>
         {status}
       </p>
     </div>

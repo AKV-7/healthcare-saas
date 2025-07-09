@@ -1,211 +1,83 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { body } = require('express-validator');
-const {
-  register,
-  login,
-  logout,
-  getMe,
-  updateDetails,
-  updatePassword,
-  forgotPassword,
-  resetPassword,
-  verifyEmail,
-  sendAdminOtp,
-  adminOtpStore
-} = require('../controllers/auth.controller');
-const { protect, authRateLimit } = require('../middleware/auth');
-const User = require('../models/User');
-const bcrypt = require('bcryptjs');
+const { register } = require('../controllers/auth.controller');
+const { authRateLimit } = require('../middleware/auth');
 const jwt = require('jsonwebtoken');
 const { logger } = require('../utils/logger');
+const { getCurrentAdminPasskey, setAdminPasskey } = require('../utils/passkey-storage');
 
 const router = express.Router();
 
 // Rate limiting for auth endpoints
 const authLimiter = rateLimit(authRateLimit);
 
-// Validation middleware
+// Validation middleware for simplified registration
 const validateRegistration = [
+  body('name')
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Name must be between 2 and 100 characters'),
   body('email')
     .isEmail()
     .withMessage('Please provide a valid email')
     .normalizeEmail(),
-  body('password')
-    .isLength({ min: 12 })
-    .withMessage('Password must be at least 12 characters long')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$/)
-    .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'),
-  body('firstName')
-    .trim()
-    .isLength({ min: 2, max: 50 })
-    .withMessage('First name must be between 2 and 50 characters'),
-  body('lastName')
-    .trim()
-    .isLength({ min: 2, max: 50 })
-    .withMessage('Last name must be between 2 and 50 characters'),
-  body('role')
-    .optional()
-    .isIn(['admin', 'doctor', 'patient', 'nurse'])
-    .withMessage('Invalid role'),
   body('phone')
-    .optional()
-    .matches(/^\+?[1-9]\d{1,14}$/)
-    .withMessage('Please provide a valid phone number'),
-  body('dateOfBirth')
-    .optional()
-    .isISO8601()
-    .withMessage('Please provide a valid date of birth'),
+    .matches(/^\+91[6-9]\d{9}$/)
+    .withMessage('Please provide a valid Indian mobile number with +91'),
+  body('age')
+    .isInt({ min: 1, max: 120 })
+    .withMessage('Age must be between 1 and 120 years'),
   body('gender')
-    .optional()
-    .isIn(['male', 'female', 'other', 'prefer-not-to-say'])
-    .withMessage('Invalid gender')
+    .isIn(['male', 'female', 'other'])
+    .withMessage('Gender must be male, female, or other')
 ];
 
-const validateLogin = [
-  body('email')
-    .isEmail()
-    .withMessage('Please provide a valid email')
-    .normalizeEmail(),
-  body('password')
-    .notEmpty()
-    .withMessage('Password is required')
-];
-
-const validateUpdateDetails = [
-  body('firstName')
-    .optional()
-    .trim()
-    .isLength({ min: 2, max: 50 })
-    .withMessage('First name must be between 2 and 50 characters'),
-  body('lastName')
-    .optional()
-    .trim()
-    .isLength({ min: 2, max: 50 })
-    .withMessage('Last name must be between 2 and 50 characters'),
-  body('phone')
-    .optional()
-    .matches(/^\+?[1-9]\d{1,14}$/)
-    .withMessage('Please provide a valid phone number'),
-  body('dateOfBirth')
-    .optional()
-    .isISO8601()
-    .withMessage('Please provide a valid date of birth'),
-  body('gender')
-    .optional()
-    .isIn(['male', 'female', 'other', 'prefer-not-to-say'])
-    .withMessage('Invalid gender')
-];
-
-const validateUpdatePassword = [
-  body('currentPassword')
-    .notEmpty()
-    .withMessage('Current password is required'),
-  body('newPassword')
-    .isLength({ min: 12 })
-    .withMessage('New password must be at least 12 characters long')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$/)
-    .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character')
-];
-
-const validateForgotPassword = [
-  body('email')
-    .isEmail()
-    .withMessage('Please provide a valid email')
-    .normalizeEmail()
-];
-
-const validateResetPassword = [
-  body('password')
-    .isLength({ min: 12 })
-    .withMessage('Password must be at least 12 characters long')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$/)
-    .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character')
-];
-
-// Routes
+// Simplified routes for passwordless registration
 router.post('/register', authLimiter, validateRegistration, register);
-router.get('/verify/:token', verifyEmail);
-router.post('/login', authLimiter, validateLogin, login);
-router.post('/logout', protect, logout);
-router.get('/me', protect, getMe);
-router.put('/updatedetails', protect, validateUpdateDetails, updateDetails);
-router.put('/updatepassword', protect, validateUpdatePassword, updatePassword);
-router.post('/forgotpassword', authLimiter, validateForgotPassword, forgotPassword);
-router.put('/resetpassword/:resettoken', validateResetPassword, resetPassword);
 
-// Admin login route
+// Keep admin login with passkey for admin access
 router.post('/admin-login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    logger.info('Admin login attempt for email:', email);
+    const { passkey } = req.body;
+    logger.info('Admin login attempt with passkey');
 
-    if (!email || !password) {
+    if (!passkey) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide email and password'
+        message: 'Passkey is required'
       });
     }
 
-    // Find admin user by email (any admin role)
-    const user = await User.findOne({ 
-      email, 
-      role: { $in: ['super_admin', 'admin', 'hospital_manager'] } 
-    }).select('+password');
-    
-    if (!user) {
+    // Verify admin passkey
+    const adminPasskey = getCurrentAdminPasskey();
+    if (passkey !== adminPasskey) {
+      logger.info(`Admin login failed - invalid passkey. Expected: ${adminPasskey}, Received: ${passkey}`);
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: 'Invalid admin passkey'
       });
     }
 
-    // Check if user is active
-    if (!user.isActive) {
-      return res.status(401).json({
-        success: false,
-        message: 'Account is deactivated'
-      });
-    }
-
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
-    }
-
-    // Generate JWT token
+    // Generate admin session token
     const token = jwt.sign(
       { 
-        id: user._id, 
-        email: user.email, 
-        role: user.role,
-        adminLevel: user.adminLevel
+        role: 'admin',
+        type: 'admin_session'
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRE || '7d' }
     );
 
-    // Update last login
-    user.lastLogin = new Date();
-    await user.save();
+    logger.info('Admin login successful');
 
-    // Return success response
     res.json({
       success: true,
       message: 'Admin login successful',
       token,
       user: {
-        id: user._id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
-        adminLevel: user.adminLevel
+        role: 'admin',
+        type: 'admin_session'
       }
     });
 
@@ -213,201 +85,290 @@ router.post('/admin-login', async (req, res) => {
     logger.error('Admin login error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error during login'
+      message: 'Server error during admin login'
     });
   }
 });
 
-// Admin token refresh route
-router.post('/admin-refresh', protect, async (req, res) => {
+// Simple admin token verification endpoint
+router.get('/verify-admin', async (req, res) => {
   try {
-    // Check if user is an admin
-    if (!['super_admin', 'admin', 'hospital_manager'].includes(req.user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to refresh admin token'
-      });
-    }
-
-    // Generate new token
-    const token = jwt.sign(
-      { 
-        id: req.user._id, 
-        email: req.user.email, 
-        role: req.user.role,
-        adminLevel: req.user.adminLevel
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRE || '7d' }
-    );
-
-    res.json({
-      success: true,
-      message: 'Token refreshed successfully',
-      token,
-      user: {
-        id: req.user._id,
-        email: req.user.email,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        role: req.user.role,
-        adminLevel: req.user.adminLevel
-      }
-    });
-
-  } catch (error) {
-    logger.error('Admin token refresh error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error during token refresh'
-    });
-  }
-});
-
-// Admin password verification route
-router.post('/admin-verify-password', protect, async (req, res) => {
-  try {
-    const { password } = req.body;
+    const token = req.headers.authorization?.split(' ')[1];
     
-    // Check if user is an admin
-    if (!['super_admin', 'admin', 'hospital_manager'].includes(req.user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to verify admin password'
-      });
-    }
-
-    if (!password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password is required'
-      });
-    }
-
-    // Get the current admin user with password
-    const user = await User.findById(req.user.id).select('+password');
-    
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'Admin user not found'
-      });
-    }
-
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    
-    if (!isPasswordValid) {
+    if (!token) {
       return res.status(401).json({
         success: false,
-        message: 'Incorrect password'
+        message: 'No token provided'
       });
     }
 
-    res.json({
-      success: true,
-      message: 'Password verified successfully'
-    });
+    // Verify admin session token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (decoded.type === 'admin_session' && decoded.role === 'admin') {
+      return res.json({
+        success: true,
+        message: 'Token is valid',
+        admin: {
+          role: 'admin',
+          type: 'admin_session'
+        }
+      });
+    }
 
-  } catch (error) {
-    logger.error('Admin password verification error:', error);
-    res.status(500).json({
+    return res.status(401).json({
       success: false,
-      message: 'Server error during password verification'
+      message: 'Invalid admin token'
+    });
+  } catch (error) {
+    logger.error('Admin token verification error:', error);
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid or expired token'
     });
   }
 });
 
-// Admin password reset route
-router.post('/admin-reset-password', async (req, res) => {
+// Get current admin info endpoint
+router.get('/me', async (req, res) => {
   try {
-    const { email, otp, newPassword } = req.body;
-
-    // Validate input
-    if (!email || !otp || !newPassword) {
-      return res.status(400).json({
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    if (!token) {
+      return res.status(401).json({
         success: false,
-        message: 'Email, OTP, and new password are required'
+        message: 'No token provided'
       });
     }
 
-    // Validate password strength
-    if (newPassword.length < 12) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password must be at least 12 characters long'
+    // Verify admin session token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (decoded.type === 'admin_session' && decoded.role === 'admin') {
+      return res.json({
+        success: true,
+        data: {
+          id: 'admin_session',
+          firstName: 'Admin',
+          lastName: 'User',
+          email: 'admin@healthcare.com',
+          role: 'admin',
+          type: 'admin_session'
+        }
       });
     }
 
-    // Find admin user by email
-    const user = await User.findOne({
-      email: email.toLowerCase(),
-      role: { $in: ['super_admin', 'admin', 'hospital_manager'] }
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid admin token'
     });
+  } catch (error) {
+    logger.error('Get admin info error:', error);
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid or expired token'
+    });
+  }
+});
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'Admin user not found'
+// Forgot admin passkey - send OTP to clinic email
+router.post('/admin/forgot-passkey', authLimiter, async (req, res) => {
+  try {
+    const clinicEmail = 'khushihomeopathicclinic@gmail.com';
+    
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Store OTP temporarily (in production, use Redis or database)
+    // For now, store in memory with expiration
+    global.resetOTP = {
+      otp: otp,
+      expires: Date.now() + 10 * 60 * 1000, // 10 minutes
+      email: clinicEmail
+    };
+    
+    // Log OTP for testing (remove in production)
+    console.log(`🔐 ADMIN PASSKEY RESET OTP: ${otp} (expires in 10 minutes)`);
+    
+    // Try to send OTP email, but don't fail if email service is down
+    try {
+      const { sendMail } = require('../utils/email-simple');
+      const emailTemplates = require('../utils/emailTemplates');
+      
+      // Use the proper email template
+      const emailContent = emailTemplates.adminOtp({ otp });
+      
+      await sendMail({
+        to: clinicEmail,
+        subject: emailContent.subject,
+        html: emailContent.html
+      });
+      logger.info('Passkey reset OTP sent to clinic email');
+      
+      res.json({
+        success: true,
+        message: 'OTP sent to clinic email address. Please check your email.',
+        email: clinicEmail.replace(/(.{2}).*@/, '$1***@') // Partially mask email
+      });
+    } catch (emailError) {
+      logger.error('Email sending failed, but OTP generated:', emailError);
+      
+      // If email fails, still provide the OTP for testing/emergency access
+      res.json({
+        success: true,
+        message: 'OTP generated successfully. Check server console for OTP (email service temporarily unavailable).',
+        email: clinicEmail.replace(/(.{2}).*@/, '$1***@'),
+        note: 'Email service temporarily unavailable. Contact system administrator.',
+        serverOtp: process.env.NODE_ENV === 'development' ? otp : undefined // Only show in development
       });
     }
+  } catch (error) {
+    logger.error('Forgot passkey error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate reset OTP. Please try again.'
+    });
+  }
+});
 
-    // Verify OTP against stored OTP
-    const storedOtpData = adminOtpStore[email.toLowerCase()];
-    if (!storedOtpData) {
+// Reset admin passkey with OTP
+router.post('/admin/reset-passkey', authLimiter, async (req, res) => {
+  try {
+    const { otp, newPasskey } = req.body;
+    
+    if (!otp || !newPasskey) {
       return res.status(400).json({
         success: false,
-        message: 'No OTP found for this email. Please request a new OTP.'
+        message: 'OTP and new passkey are required'
       });
     }
-
-    // Check if OTP has expired
-    if (Date.now() > storedOtpData.expires) {
-      delete adminOtpStore[email.toLowerCase()]; // Clean up expired OTP
+    
+    // Validate new passkey
+    if (newPasskey.length < 6) {
       return res.status(400).json({
         success: false,
-        message: 'OTP has expired. Please request a new OTP.'
+        message: 'New passkey must be at least 6 characters long'
       });
     }
-
-    // Verify OTP matches
-    if (otp !== storedOtpData.otp) {
+    
+    // Check if OTP exists and is valid
+    if (!global.resetOTP) {
+      return res.status(400).json({
+        success: false,
+        message: 'No active reset request found. Please request a new OTP.'
+      });
+    }
+    
+    // Check if OTP is expired
+    if (Date.now() > global.resetOTP.expires) {
+      global.resetOTP = null; // Clear expired OTP
+      return res.status(400).json({
+        success: false,
+        message: 'OTP has expired. Please request a new one.'
+      });
+    }
+    
+    // Verify OTP
+    if (otp !== global.resetOTP.otp) {
       return res.status(400).json({
         success: false,
         message: 'Invalid OTP. Please check and try again.'
       });
     }
-
-    // OTP is valid, clean up the stored OTP
-    delete adminOtpStore[email.toLowerCase()];
-
-    // Hash the new password
-    const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12;
-    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
-
-    // Update the user's password directly without triggering pre-save hook
-    await User.updateOne(
-      { _id: user._id },
-      { $set: { password: hashedPassword } }
-    );
-
-    logger.info(`Admin password reset successful for: ${email}`);
-
+    
+    // Update the admin passkey using the persistent storage
+    const passkeyUpdated = setAdminPasskey(newPasskey);
+    
+    if (!passkeyUpdated) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to update admin passkey'
+      });
+    }
+    
+    // Clear the OTP
+    global.resetOTP = null;
+    
+    // Send confirmation email
+    try {
+      const { sendMail } = require('../utils/email-simple');
+      const subject = 'Admin Passkey Successfully Reset - Khushi Homeopathic Clinic';
+      const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #16a34a;">Passkey Reset Successful</h2>
+          <p>Hello Admin,</p>
+          <p>Your admin passkey has been successfully reset.</p>
+          <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #bbf7d0;">
+            <p style="color: #166534; margin: 0;"><strong>✅ Your new passkey is now active and ready to use.</strong></p>
+          </div>
+          <p>You can now login to the admin dashboard using your new passkey.</p>
+          <p>If you did not make this change, please contact system support immediately.</p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+          <p style="color: #6b7280; font-size: 12px;">
+            Khushi Homeopathic Clinic<br>
+            Admin Dashboard Security System<br>
+            Reset completed at: ${new Date().toLocaleString()}
+          </p>
+        </div>
+      `;
+      
+      await sendMail({
+        to: 'khushihomeopathicclinic@gmail.com',
+        subject: subject,
+        html: html
+      });
+    } catch (emailError) {
+      logger.warn('Confirmation email failed (but passkey was reset):', emailError);
+    }
+    
+    logger.info('Admin passkey successfully reset');
+    
     res.json({
       success: true,
-      message: 'Password reset successful'
+      message: 'Passkey reset successful! You can now login with your new passkey.'
     });
-
   } catch (error) {
-    logger.error('Admin password reset error:', error);
+    logger.error('Reset passkey error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error during password reset'
+      message: 'Failed to reset passkey. Please try again.'
     });
   }
 });
 
-// Add this route for admin OTP
-router.post('/admin-send-otp', sendAdminOtp);
+// Simple passkey verification endpoint for admin actions
+router.post('/verify-passkey', async (req, res) => {
+  try {
+    const { passkey } = req.body;
+    
+    if (!passkey) {
+      return res.status(400).json({
+        success: false,
+        message: 'Passkey is required'
+      });
+    }
+
+    // Verify admin passkey
+    const adminPasskey = getCurrentAdminPasskey();
+    if (passkey !== adminPasskey) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid admin passkey'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Passkey verified successfully'
+    });
+
+  } catch (error) {
+    logger.error('Passkey verification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during passkey verification'
+    });
+  }
+});
 
 module.exports = router;
