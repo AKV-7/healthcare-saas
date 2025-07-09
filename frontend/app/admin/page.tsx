@@ -42,7 +42,7 @@ interface Appointment {
 }
 
 interface User {
-  id: number;
+  id: string;
   name: string;
   email: string;
   role: string;
@@ -199,15 +199,23 @@ export default function AdminDashboard() {
           
       if (usersResponse.ok) {
         const usersData = await usersResponse.json();
-            setUsers(usersData.data || []);
-          } else {
-            console.error('Failed to fetch users:', usersResponse.statusText);
-          }
-        } catch (error) {
-          console.error('Error fetching users:', error);
-          // Set empty data to prevent UI from breaking
-          setUsers([]);
-        }
+        // Map _id to id for frontend compatibility
+        const mappedUsers = (usersData.data || []).map((user: any) => ({
+          id: user._id || user.id || user.userId, // fallback for legacy
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          status: user.status || (user.isActive ? 'active' : 'inactive'),
+        }));
+        setUsers(mappedUsers);
+      } else {
+        console.error('Failed to fetch users:', usersResponse.statusText);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      // Set empty data to prevent UI from breaking
+      setUsers([]);
+    }
       }, 3000);
       
       if (statsResponse.ok) {
@@ -392,9 +400,8 @@ export default function AdminDashboard() {
   };
 
   // Delete user
-  const deleteUser = async (userId: number) => {
+  const deleteUser = async (userId: string) => {
     if (!confirm('Are you sure you want to delete this user?')) return;
-    
     try {
       const adminToken = localStorage.getItem('adminToken');
       const response = await fetch(`/api/admin/users?userId=${userId}`, {
@@ -1445,7 +1452,7 @@ export default function AdminDashboard() {
                   disabled={isEditing}
                   className={`px-4 py-2 flex items-center gap-1 border-red-500 text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/30 ${isEditing ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="size-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="size-4 mr-1" fill="none" viewBox="00 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
                   Delete

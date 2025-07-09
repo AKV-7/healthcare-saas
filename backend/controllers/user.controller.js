@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const Appointment = require('../models/Appointment');
 const { logger } = require('../utils/logger');
+const mongoose = require('mongoose');
 
 // @desc    Get all users (Admin only)
 // @route   GET /api/users
@@ -253,6 +254,12 @@ const updateUser = async (req, res) => {
 // @access  Private/Admin
 const deleteUser = async (req, res) => {
   try {
+    if (!req.params.id || !mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'A valid User ID is required for deletion'
+      });
+    }
     const user = await User.findById(req.params.id);
 
     if (!user) {
