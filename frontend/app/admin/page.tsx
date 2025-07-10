@@ -117,7 +117,7 @@ export default function AdminDashboard() {
   // Reports pagination state
   const [reportsPage, setReportsPage] = useState(1);
   const reportsLimit = 20;
-  const [reportsTotal, setReportsTotal] = useState(0);
+  // const [reportsTotal, setReportsTotal] = useState(0);
   
   const router = useRouter();
   
@@ -339,7 +339,7 @@ export default function AdminDashboard() {
   const filteredReports = appointments.filter(
     (appointment) => appointment.attachments && appointment.attachments.length > 0
   );
-  const paginatedReports = filteredReports.slice((reportsPage - 1) * reportsLimit, reportsPage * reportsLimit);
+  // const paginatedReports = filteredReports.slice((reportsPage - 1) * reportsLimit, reportsPage * reportsLimit);
   const reportsTotalPages = Math.max(1, Math.ceil(filteredReports.length / reportsLimit));
 
   // Get status badge based on appointment status
