@@ -6,8 +6,13 @@ export async function GET(req: NextRequest) {
   try {
     // Get the Authorization header from the incoming request
     const authHeader = req.headers.get('authorization');
+    // Forward page and limit query params
+    const { searchParams } = new URL(req.url);
+    const page = searchParams.get('page') || '1';
+    const limit = searchParams.get('limit') || '10';
+    const backendUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/appointments/admin?page=${page}&limit=${limit}`;
     const response = await fetchWithRetry(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/appointments/admin`,
+      backendUrl,
       {
         headers: {
           'Content-Type': 'application/json',

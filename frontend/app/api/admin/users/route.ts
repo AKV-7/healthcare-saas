@@ -15,9 +15,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Authorization header is required' }, { status: 401 });
     }
 
+    // Forward page and limit query params
+    const { searchParams } = new URL(request.url);
+    const page = searchParams.get('page') || '1';
+    const limit = searchParams.get('limit') || '10';
+    const urlWithParams = `${backendUrl}/api/users?page=${page}&limit=${limit}`;
+
     // Use retry logic for fetching
     const response = await fetchWithRetry(
-      `${backendUrl}/api/users`,
+      urlWithParams,
       {
         method: 'GET',
         headers: {

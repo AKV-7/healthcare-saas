@@ -104,6 +104,21 @@ export default function AdminDashboard() {
   const [userConfirmationText, setUserConfirmationText] = useState('');
   const [isDeletingUsers, setIsDeletingUsers] = useState(false);
   
+  // Pagination state for appointments
+  const [appointmentPage, setAppointmentPage] = useState(1);
+  const appointmentLimit = 20;
+  const [appointmentTotal, setAppointmentTotal] = useState(0);
+  
+  // Pagination state for users
+  const [userPage, setUserPage] = useState(1);
+  const userLimit = 20;
+  const [userTotal, setUserTotal] = useState(0);
+  
+  // Reports pagination state
+  const [reportsPage, setReportsPage] = useState(1);
+  const reportsLimit = 20;
+  const [reportsTotal, setReportsTotal] = useState(0);
+  
   const router = useRouter();
   
   // Add debounce timer ref
@@ -153,7 +168,6 @@ export default function AdminDashboard() {
   // Fetch dashboard data with debounce
   const fetchDashboardData = useCallback(async () => {
     if (!isAuthenticated) return;
-    
     setLoading(true);
     try {
       const adminToken = localStorage.getItem('adminToken');
@@ -161,30 +175,27 @@ export default function AdminDashboard() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${adminToken}`
       };
-
       // Fetch stats from frontend API
       const statsResponse = await fetchWithRetry('/api/analytics/dashboard', { 
         headers,
         cache: 'no-store'
       });
-      
-      // Fetch appointments from frontend API with a longer delay
+      // Fetch appointments with pagination
       setTimeout(async () => {
         try {
-          const appointmentsResponse = await fetchWithRetry('/api/admin/appointments', { 
+          const appointmentsResponse = await fetchWithRetry(`/api/admin/appointments?page=${appointmentPage}&limit=${appointmentLimit}`, { 
             headers,
             cache: 'no-store'
           });
-          
-      if (appointmentsResponse.ok) {
-        const appointmentsData = await appointmentsResponse.json();
+          if (appointmentsResponse.ok) {
+            const appointmentsData = await appointmentsResponse.json();
             setAppointments(appointmentsData.data || []);
+            setAppointmentTotal(appointmentsData.total || 0);
           } else {
             console.error('Failed to fetch appointments:', appointmentsResponse.statusText);
           }
         } catch (error) {
           console.error('Error fetching appointments:', error);
-          // Set empty data to prevent UI from breaking
           setAppointments([]);
         }
       }, 1500);
@@ -192,30 +203,28 @@ export default function AdminDashboard() {
       // Fetch users from frontend API with a longer delay
       setTimeout(async () => {
         try {
-          const usersResponse = await fetchWithRetry('/api/admin/users', { 
+          const usersResponse = await fetchWithRetry(`/api/admin/users?page=${userPage}&limit=${userLimit}`, { 
             headers,
             cache: 'no-store'
           });
-          
-      if (usersResponse.ok) {
-        const usersData = await usersResponse.json();
-        // Map _id to id for frontend compatibility
-        const mappedUsers = (usersData.data || []).map((user: any) => ({
-          id: user._id || user.id || user.userId, // fallback for legacy
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          status: user.status || (user.isActive ? 'active' : 'inactive'),
-        }));
-        setUsers(mappedUsers);
-      } else {
-        console.error('Failed to fetch users:', usersResponse.statusText);
-      }
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      // Set empty data to prevent UI from breaking
-      setUsers([]);
-    }
+          if (usersResponse.ok) {
+            const usersData = await usersResponse.json();
+            const mappedUsers = (usersData.data || []).map((user: any) => ({
+              id: user._id || user.id || user.userId, // fallback for legacy
+              name: user.name,
+              email: user.email,
+              role: user.role,
+              status: user.status || (user.isActive ? 'active' : 'inactive'),
+            }));
+            setUsers(mappedUsers);
+            setUserTotal(usersData.total || 0);
+          } else {
+            console.error('Failed to fetch users:', usersResponse.statusText);
+          }
+        } catch (error) {
+          console.error('Error fetching users:', error);
+          setUsers([]);
+        }
       }, 3000);
       
       if (statsResponse.ok) {
@@ -244,7 +253,7 @@ export default function AdminDashboard() {
       // Set loading to false after a minimum time to prevent flickering
       setTimeout(() => setLoading(false), 500);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, appointmentPage, userPage]);
 
   // Check authentication on mount
   useEffect(() => {
@@ -325,6 +334,13 @@ export default function AdminDashboard() {
     );
     return matchesSearchTerm && matchesStatusFilter && matchesDateFilter;
   });
+
+  // Filtered appointments with files for reports
+  const filteredReports = appointments.filter(
+    (appointment) => appointment.attachments && appointment.attachments.length > 0
+  );
+  const paginatedReports = filteredReports.slice((reportsPage - 1) * reportsLimit, reportsPage * reportsLimit);
+  const reportsTotalPages = Math.max(1, Math.ceil(filteredReports.length / reportsLimit));
 
   // Get status badge based on appointment status
   const getStatusBadge = (status: string) => {
@@ -620,6 +636,10 @@ export default function AdminDashboard() {
     }
   };
 
+  // Pagination controls for appointments
+  const totalPages = Math.max(1, Math.ceil(appointmentTotal / appointmentLimit));
+  const userTotalPages = Math.max(1, Math.ceil(userTotal / userLimit));
+
   // Main dashboard
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -705,6 +725,7 @@ export default function AdminDashboard() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">Appointments</h2>
         </div>
+        
 
           {/* Tabs */}
           <div className="space-y-6">
@@ -821,19 +842,20 @@ export default function AdminDashboard() {
                     <p className="text-sm">Try adjusting your filters or search.</p>
                   </div>
                 ) : (
-                    <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700 dark:shadow-inner">
-                      <table className="w-full border-collapse">
-                        <thead className="bg-gray-50 dark:bg-gray-800/60">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300">Patient</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300">Date & Time</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300">Type</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300">Reason</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300">Status</th>
-                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-300">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="dark:bg-gray-800/30">
+                    <>
+                      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700 dark:shadow-inner">
+                        <table className="w-full border-collapse">
+                          <thead className="bg-gray-50 dark:bg-gray-800/60">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300">Patient</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300">Date & Time</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300">Type</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300">Reason</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-300">Status</th>
+                              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-300">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="dark:bg-gray-800/30">
                     {filteredAppointments.map((appointment) => (
                             <tr key={appointment.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors duration-150">
                               <td className="px-4 py-3">
@@ -911,12 +933,36 @@ export default function AdminDashboard() {
                         </tbody>
                       </table>
                   </div>
+                  {/* Pagination Controls */}
+                  <div className="flex justify-end items-center gap-2 mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={appointmentPage === 1}
+                      onClick={() => setAppointmentPage((p) => Math.max(1, p - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-sm text-gray-600 dark:text-gray-300">
+                      Page {appointmentPage} of {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={appointmentPage === totalPages || totalPages === 0}
+                      onClick={() => setAppointmentPage((p) => Math.min(totalPages, p + 1))}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </>
                 )}
               </CardContent>
             </Card>
           </div>
+        </div> {/* <-- This closes the Appointments Section div opened at line 708 */}
 
-            {/* Users Tab */}
+        {/* Users Tab */}
           <div className={activeTab === 'users' ? 'block' : 'hidden'}>
               <Card className="border-none shadow-md dark:bg-gray-800">
                 <CardHeader className="border-b border-gray-100 dark:border-gray-700">
@@ -964,59 +1010,83 @@ export default function AdminDashboard() {
                       <p className="text-sm">Try adjusting your search.</p>
                     </div>
                   ) : (
-                    <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                      <table className="w-full border-collapse">
-                        <thead className="bg-gray-50 dark:bg-gray-800/50">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Name</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Email</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Role</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Status</th>
-                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {users.map((user) => (
-                            <tr key={user.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                              <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{user.name}</td>
-                              <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{user.email}</td>
-                              <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
-                                <span className={`rounded-full px-2 py-1 text-xs font-medium ${
-                                  user.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' : 
-                                  user.role === 'doctor' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
-                                  'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                }`}>
-                                  {user.role}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className={`rounded-full px-2 py-1 text-xs font-medium ${
-                                  user.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
-                                  'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                                }`}>
-                                  {user.status}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <div className="flex justify-end gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => deleteUser(user.id)}
-                                    className="hover:bg-red-50 dark:hover:bg-red-900/30"
-                                    title="Delete User"
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="size-4 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                  </Button>
-                                </div>
-                              </td>
+                    <>
+                      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                        <table className="w-full border-collapse">
+                          <thead className="bg-gray-50 dark:bg-gray-800/50">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Name</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Email</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Role</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Status</th>
+                              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">Actions</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody>
+                            {users.map((user) => (
+                              <tr key={user.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{user.name}</td>
+                                <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{user.email}</td>
+                                <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                                  <span className={`rounded-full px-2 py-1 text-xs font-medium ${
+                                    user.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' : 
+                                    user.role === 'doctor' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+                                    'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                  }`}>
+                                    {user.role}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`rounded-full px-2 py-1 text-xs font-medium ${
+                                    user.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
+                                    'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                  }`}>
+                                    {user.status}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <div className="flex justify-end gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => deleteUser(user.id)}
+                                      className="hover:bg-red-50 dark:hover:bg-red-900/30"
+                                      title="Delete User"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="size-4 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                      </svg>
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* Pagination Controls */}
+                      <div className="flex justify-end items-center gap-2 mt-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={userPage === 1}
+                          onClick={() => setUserPage((p) => Math.max(1, p - 1))}
+                        >
+                          Previous
+                        </Button>
+                        <span className="text-sm text-gray-600 dark:text-gray-300">
+                          Page {userPage} of {userTotalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={userPage === userTotalPages || userTotalPages === 0}
+                          onClick={() => setUserPage((p) => Math.min(userTotalPages, p + 1))}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -1050,92 +1120,115 @@ export default function AdminDashboard() {
                       <p className="text-lg font-semibold">No appointments with files found.</p>
                     </div>
                   ) : (
-                    <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                      <table className="w-full border-collapse">
-                        <thead className="bg-gray-50 dark:bg-gray-800/50">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Patient</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Date & Time</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Reason</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Status</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Attachments</th>
-                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {appointments.filter(appointment => appointment.attachments && appointment.attachments.length > 0).map((appointment) => (
-                            <tr key={appointment.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                  <div className="size-10 rounded-full bg-gradient-to-r from-purple-500 to-pink-600 flex items-center justify-center text-white text-sm font-bold shadow-md">
-                                    {appointment.user.firstName.charAt(0).toUpperCase()}
-                                  </div>
-                                  <div>
-                                    <p className="font-medium text-gray-900 dark:text-white">{appointment.user.firstName} {appointment.user.lastName}</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">{appointment.user.email}</p>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3">
-                                <p className="text-sm text-gray-700 dark:text-gray-300">{formatDate(appointment.appointmentDate)}</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">{formatTime(appointment.appointmentTime)}</p>
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 max-w-[200px] truncate">{appointment.reason}</td>
-                              <td className="px-4 py-3">{getStatusBadge(appointment.status)}</td>
-                              <td className="px-4 py-3">
-                                <div className="flex flex-wrap gap-2">
-                                  {appointment.attachments && appointment.attachments.map((attachment, index) => (
-                                    <a 
-                                      key={index}
-                                      href={attachment}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center rounded-md bg-white px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 border border-gray-200 shadow-sm dark:bg-gray-800 dark:text-blue-300 dark:hover:bg-gray-700 dark:border-gray-700"
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="size-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                                      </svg>
-                                      View File {index + 1}
-                                    </a>
-                                  ))}
-                                </div>
-                              </td>
-                              <td className="px-4 py-3">
-                                <div className="flex justify-end gap-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                      setSelectedAppointment(appointment);
-                                      setShowAppointmentModal(true);
-                                    }}
-                                    className="hover:bg-blue-50 dark:hover:bg-blue-900/30"
-                                    title="View Details"
-                                  >
-                                    <Eye className="size-4 text-blue-600 dark:text-blue-400" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => deleteAppointment(appointment.id)}
-                                    className="hover:bg-red-50 dark:hover:bg-red-900/30"
-                                    title="Delete Appointment"
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="size-4 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                  </Button>
-                                </div>
-                              </td>
+                    <>
+                      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                        <table className="w-full border-collapse">
+                          <thead className="bg-gray-50 dark:bg-gray-800/50">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Patient</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Date & Time</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Reason</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Status</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Attachments</th>
+                              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">Actions</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody>
+                            {appointments.filter(appointment => appointment.attachments && appointment.attachments.length > 0).map((appointment) => (
+                              <tr key={appointment.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className="size-10 rounded-full bg-gradient-to-r from-purple-500 to-pink-600 flex items-center justify-center text-white text-sm font-bold shadow-md">
+                                      {appointment.user.firstName.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                      <p className="font-medium text-gray-900 dark:text-white">{appointment.user.firstName} {appointment.user.lastName}</p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">{appointment.user.email}</p>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <p className="text-sm text-gray-700 dark:text-gray-300">{formatDate(appointment.appointmentDate)}</p>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">{formatTime(appointment.appointmentTime)}</p>
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 max-w-[200px] truncate">{appointment.reason}</td>
+                                <td className="px-4 py-3">{getStatusBadge(appointment.status)}</td>
+                                <td className="px-4 py-3">
+                                  <div className="flex flex-wrap gap-2">
+                                    {appointment.attachments && appointment.attachments.map((attachment, index) => (
+                                      <a 
+                                        key={index}
+                                        href={attachment}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center rounded-md bg-white px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 border border-gray-200 shadow-sm dark:bg-gray-800 dark:text-blue-300 dark:hover:bg-gray-700 dark:border-gray-700"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="size-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                        </svg>
+                                        View File {index + 1}
+                                      </a>
+                                    ))}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex justify-end gap-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        setSelectedAppointment(appointment);
+                                        setShowAppointmentModal(true);
+                                      }}
+                                      className="hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                                      title="View Details"
+                                    >
+                                      <Eye className="size-4 text-blue-600 dark:text-blue-400" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => deleteAppointment(appointment.id)}
+                                      className="hover:bg-red-50 dark:hover:bg-red-900/30"
+                                      title="Delete Appointment"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="size-4 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                      </svg>
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* Pagination Controls */}
+                      <div className="flex justify-end items-center gap-2 mt-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={reportsPage === 1}
+                          onClick={() => setReportsPage((p) => Math.max(1, p - 1))}
+                        >
+                          Previous
+                        </Button>
+                        <span className="text-sm text-gray-600 dark:text-gray-300">
+                          Page {reportsPage} of {reportsTotalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={reportsPage === reportsTotalPages || reportsTotalPages === 0}
+                          onClick={() => setReportsPage((p) => Math.min(reportsTotalPages, p + 1))}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
-            </div>
           </div>
         </div>
       </main>
@@ -1437,7 +1530,7 @@ export default function AdminDashboard() {
                     }}
                     className="px-4 py-2 flex items-center gap-1 border-amber-500 text-amber-600 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/30"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="size-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="size-4 mr-1" fill="none" viewBox="00 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                     Edit
