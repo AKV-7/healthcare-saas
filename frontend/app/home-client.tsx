@@ -612,9 +612,9 @@ export default function HomeClient() {
                     <div className="ml-3">
                       <p className="text-sm font-medium text-gray-900 dark:text-white">Address</p>
                       <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-                        Side Gate Yuvraj Residence<br />
-                        Near Sale Tax Office Stadium Road<br />
-                        Ram Ganga Vihar, Moradabad
+                        F-18 RAMGANGA VIHAR, PHASE-2<br />
+                        NEAR MIT COLLEGE<br />
+                        MORADABAD (U.P)
                       </p>
                     </div>
                   </div>
