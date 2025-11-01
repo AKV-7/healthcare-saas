@@ -642,7 +642,7 @@ export default function HomeClient() {
                     </div>
                     <div className="ml-3">
                       <p className="text-sm font-medium text-gray-900 dark:text-white">Email</p>
-                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">info@khushihomoeo.com</p>
+                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">khushihomeopathicclinic@gmail.com</p>
                     </div>
                   </div>
                   
