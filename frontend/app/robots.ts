@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = 'https://healthcare-saas.vercel.app'; // Update with your actual domain
+  const baseUrl = 'https://www.khushihomeo.com';
 
   return {
     rules: [
