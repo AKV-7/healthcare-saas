@@ -704,6 +704,17 @@ export default function HomeClient() {
                 Providing natural and effective homeopathic treatments for over 15 years. 
                 Your health is our priority, and we&apos;re committed to helping you achieve lasting wellness.
               </p>
+              <div className="mt-6 space-y-2 text-sm text-gray-300">
+                <p className="font-semibold text-white">Khushi Homoeopathic Clinic</p>
+                <p>F-18 RAMGANGA VIHAR, PHASE-2</p>
+                <p>NEAR MIT COLLEGE, MORADABAD (U.P)</p>
+                <p className="mt-3">
+                  <span className="font-medium">Phone:</span> +91 9756077474, +91 7017819734
+                </p>
+                <p>
+                  <span className="font-medium">Email:</span> khushihomeopathicclinic@gmail.com
+                </p>
+              </div>
             </div>
             
             <div>

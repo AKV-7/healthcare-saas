@@ -12,9 +12,9 @@ const fontSans = FontSans({
 });
 
 export const metadata: Metadata = {
-  title: 'Khushi Homoeopathic Clinic',
+  title: 'Best Homeopathy Doctor in Moradabad - Khushi Homeopathic Clinic',
   description:
-    'Khushi Homoeopathic Clinic - Natural and effective homeopathic treatments, patient registration, appointment scheduling, and more.',
+    'Khushi Homoeopathic Clinic in Moradabad - Expert homeopathic doctors providing natural, safe, and effective treatments for skin diseases, joint pain, mental health, and more. Book your appointment today.',
   icons: {
     icon: 'https://res.cloudinary.com/dgvs3l5yo/image/upload/v1751455263/healthcare/icons/healthcare/icons/khushi-homoeo-logo.svg',
   },
