@@ -216,7 +216,7 @@ export default function HomeClient() {
               <div className="absolute -inset-4 rounded-[2rem] bg-gradient-to-r from-rose-500/20 to-amber-500/20 opacity-50 blur-2xl transition-opacity duration-500 group-hover:opacity-75 dark:from-rose-500/30 dark:to-amber-500/30"></div>
               <div className="relative h-[600px] overflow-hidden rounded-3xl shadow-2xl transition-transform duration-500 group-hover:-rotate-1 group-hover:scale-[1.02]">
                 <Image
-                  src="https://res.cloudinary.com/dgvs3l5yo/image/upload/v1751455211/healthcare/images/healthcare/images/clinic1.jpg"
+                  src="https://res.cloudinary.com/dgvs3l5yo/image/upload/v1751455211/healthcare/images/healthcare/images/clinic1.jpg?updated=2024"
                   alt="Khushi Homoeopathic Clinic"
                   width={800}
                   height={600}
